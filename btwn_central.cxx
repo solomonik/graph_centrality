@@ -30,9 +30,11 @@ void btwn_cnt_fast(Matrix<int> A, int b, Vector<double> & v, int nbatches){
   Semiring<mpath> p = get_mpath_semiring();
   Monoid<cpath> cp = get_cpath_monoid();
 
-
   for (int ib=0; ib<n && (nbatches == 0 || ib/b<nbatches); ib+=b){
     int k = std::min(b, n-ib);
+
+    Timer_epoch tblmn("Bellman_ep");
+    tblmn.begin();
 
     //initialize shortest mpath vectors from the next k sources to the corresponding columns of the adjacency matrices and loops with weight 0
     ((Transform<int>)([=](int& w){ w = 0; }))(A["ii"]);
@@ -64,6 +66,10 @@ void btwn_cnt_fast(Matrix<int> A, int b, Vector<double> & v, int nbatches){
     }
     double tbl = MPI_Wtime() - sbl;
 
+    tblmn.end();
+
+    Timer_epoch tbrnd("Brandes_ep");
+    tbrnd.begin();
     //transfer shortest mpath data to Matrix of cpaths to compute c centrality scores
     Matrix<cpath> cB(n, k, dw, cp, "cB");
     ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ cp = cpath(p.w, 1./p.m, 0.); }))(B["ij"],cB["ij"]);
@@ -86,6 +92,7 @@ void btwn_cnt_fast(Matrix<int> A, int b, Vector<double> & v, int nbatches){
       if (num_changed.get_val() == 0) break;
     }
     double tbr = MPI_Wtime() - sbr;
+    tbrnd.end();
 #ifndef TEST_SUITE
     if (dw.rank == 0)
       printf("(%d ,%d) iter (%lf, %lf) sec\n", nbl, nbr, tbl, tbr);
