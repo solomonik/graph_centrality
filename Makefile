@@ -2,13 +2,13 @@ include config.mk
 
 all: test_btwn_central
 
-btwn_central_kernels.o: btwn_central.h btwn_central_kernels.cxx
+btwn_central_kernels.o: btwn_central.h btwn_central_kernels.cxx config.mk 
 	$(NVCC) $(NVCCFLAGS) -c btwn_central_kernels.cxx $(INCLUDES)
 
-btwn_central.o: btwn_central.cxx btwn_central.h 
+btwn_central.o: btwn_central.cxx btwn_central.h config.mk
 	$(CXX) $(CXXFLAGS) -c btwn_central.cxx $(INCLUDES)
 
-test_btwn_central: btwn_central.o btwn_central_kernels.o test_btwn_central.cxx
+test_btwn_central: btwn_central.o btwn_central_kernels.o test_btwn_central.cxx config.mk
 	$(CXX) $(CXXFLAGS) -o test_btwn_central test_btwn_central.cxx btwn_central.o btwn_central_kernels.o $(INCLUDES) $(LIBS)
 
 clean:
