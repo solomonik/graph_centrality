@@ -56,7 +56,7 @@ CTF::Bivar_Function<int,cpath,cpath> * get_Brandes_kernel();
   * \param[out] v vector that will contain centrality scores for each vertex
   * \param[in] nbatches, number of batches (sets of nodes of size b) to compute on (0 means all)
   */
-void btwn_cnt_fast(CTF::Matrix<int> A, int b, CTF::Vector<double> & v, int nbatches=0);
+void btwn_cnt_fast(CTF::Matrix<int> A, int64_t b, CTF::Vector<double> & v, int nbatches=0);
 
 /**
   * \brief naive algorithm for betweenness centrality using 3D tensor of counts

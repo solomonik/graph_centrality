@@ -7,7 +7,7 @@ using namespace CTF;
 
 
 // calculate betweenness centrality a graph of n nodes distributed on World (communicator) dw
-int btwn_cnt(int     n,
+int btwn_cnt(int64_t n,
              World & dw,
              double  sp=.20,
              int     bsize=2,
@@ -31,9 +31,9 @@ int btwn_cnt(int     n,
   int64_t inds[nmy];
   int vals[nmy];
   int i=0;
-  for (int row=dw.rank*n/dw.np; row<(int)(dw.rank+1)*n/dw.np; row++){
-    int cols[std::max((int)(n*sp),1)];
-    for (int col=0; col<std::max((int)(n*sp),1); col++){
+  for (int64_t row=dw.rank*n/dw.np; row<(int)(dw.rank+1)*n/dw.np; row++){
+    int64_t cols[std::max((int)(n*sp),1)];
+    for (int64_t col=0; col<std::max((int)(n*sp),1); col++){
       bool is_rep;
       do {
         cols[col] = rand()%n;
@@ -43,7 +43,7 @@ int btwn_cnt(int     n,
         }
       } while (is_rep);
       inds[i] = cols[col]*n+row;
-      vals[i] = (rand()%std::min(n*n,20))+1;
+      vals[i] = (rand()%std::min(n,(int64_t)20))+1;
       i++;
     }
   }
