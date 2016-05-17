@@ -260,10 +260,11 @@ int main(int argc, char ** argv){
     }
     if (scale > 0 && ef > 0){
       printf("R-MAT MODE ON scale=%d ef=%d seed=%u\n", scale, ef, myseed);
+	pass = btwn_cnt_rmat(scale, dw, ef, bsize, nbatches, test, myseed);
+
     }
-    //pass = btwn_cnt(n, dw, sp, bsize, nbatches, test);
-    pass = btwn_cnt_rmat(scale, dw, ef, bsize, nbatches, test, myseed);
-    //assert(pass);
+    else pass = btwn_cnt(n, dw, sp, bsize, nbatches, test);
+     //assert(pass);
   }
 
   MPI_Finalize();
