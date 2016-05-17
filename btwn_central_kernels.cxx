@@ -1,4 +1,3 @@
-
 #include "btwn_central.h"
 #include <ctf.hpp>
 using namespace CTF;
