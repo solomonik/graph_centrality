@@ -5,13 +5,13 @@
 
 using namespace CTF;
 
-int btwn_cnt_rmat(int     scale,
-             World & dw,
-             int  ef=10,
-             int     bsize=2,
-             int     nbatches=1,
-             int     test=0,
-	     uint64_t gseed=23  ){
+int btwn_cnt_rmat(int      scale,
+                  World &  dw,
+                  int      ef=10,
+                  int      bsize=2,
+                  int      nbatches=1,
+                  int      test=0,
+                  uint64_t gseed=23){
 
   //tropical semiring, define additive identity to be INT_MAX/2 to prevent integer overflow
   Semiring<int> s(INT_MAX/2, 
@@ -21,46 +21,66 @@ int btwn_cnt_rmat(int     scale,
                   [](int a, int b){ return a+b; });
 
   //random adjacency matrix
-  int n = pow (2, scale);
-  Matrix<int> A(n, n, SP, dw, s, "A");
+  int64_t n = pow (2, scale);
+  Matrix<int> A_pre(n, n, SP, dw, s, "A_pre");
 
-  //fill with values in the range of [1,min(n*n,100)]
-  srand(dw.rank+1);
-//  A.fill_random(1, std::min(n*n,100)); 
- // int nmy = ((int)std::max((int)(n*sp),(int)1))*((int)((n+dw.np-1)/dw.np));
-  //int i=0;
   uint64_t *edge=NULL;
   uint64_t nedges = 0;
-//  int scale = 10;
-//  int edgef = 16;
   
-  printf("Graph generator: ");
+  if (dw.rank == 0) printf("Running graph generator... ");
   nedges = gen_graph(scale, ef, gseed, &edge);
-  int64_t inds[nedges];
-  int vals[nedges];
+  if (dw.rank == 0) printf("done.\n");
+  int64_t * inds = (int64_t*)malloc(sizeof(int64_t)*nedges);
+  int * vals = (int*)malloc(sizeof(int)*nedges);
 
-  for (int i=0; i<nedges; i++){
-    inds[i] = edge[2*i]+edge[2*i]*n;
+  srand(dw.rank+1);
+  for (int64_t i=0; i<nedges; i++){
+    inds[i] = edge[2*i]+edge[2*i+1]*n;
     vals[i] = rand()%20 + 1;
   }
-//  uint64_t gseed = SEED;
-  printf("edges generated %lu\n", nedges);
-  A.write(nedges,inds,vals);
+  if (dw.rank == 0) printf("filling CTF graph\n");
+  A_pre.write(nedges,inds,vals);
   
-  A["ii"] = 0;
-  
-  //keep only values smaller than 20 (about 20% sparsity)
-  //A.sparsify([=](int a){ return a<sp*100; });
+  A_pre["ii"] = 0;
+ 
+  A_pre.sparsify([](int a){ return a>0; });
+ 
+  if (dw.rank == 0) 
+    printf("A contains %ld nonzeros, proc 0 generated %lu edges\n", A_pre.nnz_tot, nedges);
 
+  Vector<int> rc(n, dw);
+  rc["i"] += ((Function<int>)([](int a){ return (int)(a>0); }))(A_pre["ij"]);
+  rc["i"] += ((Function<int>)([](int a){ return (int)(a>0); }))(A_pre["ji"]);
+  int * all_rc; // = (int*)malloc(sizeof(int)*n);
+  int64_t nval;
+  rc.read_all(&nval, &all_rc);
+  int n_nnz_rc = 0;
+  int n_single = 0;
+  int n_double = 0;
+  for (int i=0; i<nval; i++){
+    if (all_rc[i] != 0){
+      if (all_rc[i] == 1) n_single++;
+      else if (all_rc[i] == 2) n_double++;
+      all_rc[n_nnz_rc] = i;
+      n_nnz_rc++;
+    } else {
+      all_rc[i] = -1;
+    }
+  }
+  if (dw.rank == 0) printf("n_nnz_rc = %ld of %ld vertices kept, %ld are 0-degree, %ld are 1-degree, %ld are 2-degree\n", n_nnz_rc, n,(n-n_nnz_rc),n_single,n_double);
+  Matrix<int> A(n_nnz_rc, n_nnz_rc, SP, dw, s, "A");
+  int * pntrs[] = {all_rc, all_rc};
+
+  A.permute(0, A_pre, pntrs, 0);
+
+  if (dw.rank == 0) printf("preprocessed matrix has %ld edges\n", A.nnz_tot); 
+
+  n = n_nnz_rc;
 
   Vector<double> v1(n,dw);
   Vector<double> v2(n,dw);
 
   double st_time = MPI_Wtime();
-
-
- // v1.print();
- // v2.print();
 
   if (test || n<= 20){
     btwn_cnt_naive(A, v1);
@@ -260,7 +280,7 @@ int main(int argc, char ** argv){
     }
     if (scale > 0 && ef > 0){
       printf("R-MAT MODE ON scale=%d ef=%d seed=%u\n", scale, ef, myseed);
-	pass = btwn_cnt_rmat(scale, dw, ef, bsize, nbatches, test, myseed);
+      pass = btwn_cnt_rmat(scale, dw, ef, bsize, nbatches, test, myseed);
 
     }
     else pass = btwn_cnt(n, dw, sp, bsize, nbatches, test);
