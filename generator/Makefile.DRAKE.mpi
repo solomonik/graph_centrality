@@ -2,11 +2,11 @@ MPI_INCLUDE=/usr/mpi/gcc/openmpi-1.8.4/include
 MPI_LIB=/usr/mpi/gcc/openmpi-1.8.4/lib64/
 AR = ar
 RANLIB = ranlib
-CC = cc
-CFLAGS = -Wall -Drestrict=__restrict__ -O3 -DNDEBUG -ffast-math -DGRAPH_GENERATOR_MPI -DGRAPHGEN_DISTRIBUTED_MEMORY  -I$(MPI_INCLUDE)
+CC = /opt/gcc49/bin/gcc
+CFLAGS = -Wall -Drestrict=__restrict__ -O3 -DNDEBUG -ffast-math -DGRAPH_GENERATOR_MPI -DGRAPHGEN_DISTRIBUTED_MEMORY  -I$(MPI_INCLUDE) -finput-charset=UTF-8
 # CFLAGS = -g -Wall -Drestrict= -DGRAPH_GENERATOR_MPI -DGRAPHGEN_DISTRIBUTED_MEMORY # -g -pg
 LDFLAGS = -L$(MPI_LIB) -lmpi # -g -pg
-MPICC = cc # mpicc
+MPICC = /opt/gcc49/bin/gcc
 
 
 all: libgraph_generator_mpi.a generator_test_mpi
