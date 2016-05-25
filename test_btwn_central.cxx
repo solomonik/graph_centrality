@@ -81,7 +81,7 @@ Matrix <int> gen_rmat_matrix(World  & dw,
 
 }
 Matrix <int> gen_uniform_matrix(World  & dw,
-                                int   n,
+                                int64_t  n,
                                 double  sp=.20){
   Semiring<int> s(INT_MAX/2, 
                   [](int a, int b){ return std::min(a,b); },
