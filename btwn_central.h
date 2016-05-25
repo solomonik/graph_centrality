@@ -11,7 +11,12 @@
 #define HOST
 #endif
 
-
+#define SEED 23
+template <typename T>
+struct pair {
+  uint64_t k;
+  double v;
+} ;
 //structure for regular path that keeps track of the multiplicity of paths
 class mpath {
   public:
@@ -64,5 +69,6 @@ void btwn_cnt_fast(CTF::Matrix<int> A, int64_t b, CTF::Vector<double> & v, int n
   * \param[out] v vector that will contain centrality scores for each vertex
   */
 void btwn_cnt_naive(CTF::Matrix<int> & A, CTF::Vector<double> & v);
-
+uint64_t gen_graph(int scale, int edgef, uint64_t seed, uint64_t **edges);
+uint64_t norm_graph(uint64_t *ed, uint64_t ned);
 #endif
