@@ -172,7 +172,7 @@ int btwn_cnt(Matrix <int>A,
     tbtwn.end();
     if (dw.rank == 0){
       if (nbatches == 0) printf("Completed all batches in time %lf sec, projected total %lf sec.\n", MPI_Wtime()-st_time, MPI_Wtime()-st_time);
-      else printf("Completed %d batches in time %lf sec, projected total %lf sec.\n", nbatches, MPI_Wtime()-st_time, (n/(bsize*nbatches))*(MPI_Wtime()-st_time));
+      else printf("Completed %d batches in time %lf sec, projected total %lf sec. (rate: %lf verts/sec.)\n", nbatches, MPI_Wtime()-st_time, (n/(bsize*nbatches))*(MPI_Wtime()-st_time), (nbatches*bsize)/(MPI_Wtime()-st_time));
     }
     return 1;
   }
@@ -248,19 +248,22 @@ int main(int argc, char ** argv){
   {
     World dw(argc, argv);
 
+    int world_size;
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
     if (rank == 0){
-      printf("Computing betweeness centrality of %d batches of size %d, verification set to %d, prep set to %d\n", nbatches, bsize, test, prep);
+      printf("Computing betweeness centrality of %d batches of size %d, verification set to %d, prep set to %d (n. of task %d)\n", nbatches, bsize, test, prep, world_size);
     }
 
 
     if (scale > 0 && ef > 0){
-      printf("R-MAT MODE ON scale=%d ef=%d seed=%lu\n", scale, ef, myseed);
+      if (rank == 0) printf("R-MAT MODE ON scale=%d ef=%d seed=%lu\n", scale, ef, myseed);
       int n_nnz = 0;
       Matrix <int> A = gen_rmat_matrix(dw, scale, ef, myseed, prep, &n_nnz);
       pass = btwn_cnt(A,n_nnz, dw, bsize, nbatches, test);
     }
     else {
-      printf("Uniform random graph with %d nodes, with %lf percent sparsity\n",n,sp);
+      if (rank == 0) printf("Uniform random graph with %d nodes, with %lf percent sparsity\n",n,sp);
       Matrix <int>A = gen_uniform_matrix(dw, n, sp);   
       pass = btwn_cnt(A,n,dw, bsize, nbatches, test);
     }

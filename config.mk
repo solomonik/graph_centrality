@@ -1,13 +1,13 @@
-CTFDIR    = /home/flavio/CTF/ctf
-MPI_DIR   = /usr/mpi/gcc/openmpi-1.8.4
-CXX       =  /opt/gcc49/bin/g++ 
-OPTS      = -O2 -g  
-CXXFLAGS  = -std=c++0x -fopenmp $(OPTS) -Wall -fpermissive -fno-exceptions
+CTFDIR    = /users/fvella/ctf/cpu-only
+MPI_DIR   = $(MPICH_DIR)
+CXX       = CC
+OPTS      =  
+CXXFLAGS  = -std=c++0x -openmp -O3 -ipo -Wall -mkl=parallel -D_POSIX_C_SOURCE=200112L -D__STDC_LIMIT_MACROS -DFTN_UNDERSCORE=1  -DPROFILE -DPMPI
 INCLUDES  = -I$(CTFDIR)/include -I$(MPI_DIR)/include/
-LIBS      = -L$(CTFDIR)/lib -lctf -L/usr/local/cuda/lib64/ -lcuda -lcudart -lcublas -lblas -L$(MPI_DIR)/lib64 -lmpi -lmpi_cxx generator/libgraph_generator_mpi.a 
+LIBS      = -L$(CTFDIR)/lib -lctf  -L./generator/ -lgraph_generator_mpi
 DEFS        = 
-CUDA_ARCH  = sm_37
-NVCC      = nvcc -ccbin $(CXX) -x cu -m64 -std=c++11 $(OPTS)
-NVCCFLAGS =  -arch=$(CUDA_ARCH)
+CUDA_ARCH  = sm_35
+NVCC      = $(CXX)
+NVCCFLAGS = $(CXXFLAGS)
 
 
