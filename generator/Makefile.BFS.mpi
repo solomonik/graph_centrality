@@ -1,10 +1,10 @@
 AR = ar
 RANLIB = ranlib
 CC = cc
-CFLAGS = -Wall -Drestrict=__restrict__ -O3 -DNDEBUG -ffast-math -DGRAPH_GENERATOR_MPI -DGRAPHGEN_DISTRIBUTED_MEMORY -I/usr/include/openmpi-x86_64/
+CFLAGS = -Wall -Drestrict=__restrict__ -O3 -DNDEBUG -DGRAPH_GENERATOR_MPI -DGRAPHGEN_DISTRIBUTED_MEMORY
 # CFLAGS = -g -Wall -Drestrict= -DGRAPH_GENERATOR_MPI -DGRAPHGEN_DISTRIBUTED_MEMORY # -g -pg
-LDFLAGS = -lmpi # -g -pg
-MPICC = mpicc
+LDFLAGS =  # -g -pg
+MPICC = CC
 
 
 all: libgraph_generator_mpi.a generator_test_mpi
