@@ -34,6 +34,7 @@ Matrix <int> gen_rmat_matrix(World  & dw,
   }
   if (dw.rank == 0) printf("filling CTF graph\n");
   A_pre.write(nedges,inds,vals);
+  A_pre["ij"] += A_pre["ji"];
   free(inds);
   free(vals);
   
@@ -254,13 +255,15 @@ int main(int argc, char ** argv){
 
 
     if (scale > 0 && ef > 0){
-      printf("R-MAT MODE ON scale=%d ef=%d seed=%lu\n", scale, ef, myseed);
+      if (rank == 0)
+        printf("R-MAT MODE ON scale=%d ef=%d seed=%lu\n", scale, ef, myseed);
       int n_nnz = 0;
       Matrix <int> A = gen_rmat_matrix(dw, scale, ef, myseed, prep, &n_nnz);
       pass = btwn_cnt(A,n_nnz, dw, bsize, nbatches, test);
     }
     else {
-      printf("Uniform random graph with %d nodes, with %lf percent sparsity\n",n,sp);
+      if (rank == 0)
+        printf("Uniform random graph with %d nodes, with %lf percent sparsity\n",n,sp);
       Matrix <int>A = gen_uniform_matrix(dw, n, sp);   
       pass = btwn_cnt(A,n,dw, bsize, nbatches, test);
     }

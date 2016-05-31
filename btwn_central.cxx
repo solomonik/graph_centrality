@@ -42,7 +42,7 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches){
 
     //let shortest mpaths vectors be mpaths
     Matrix<mpath> B(n, k, dw, p, "B");
-    B["ij"] = ((Function<int,mpath>)([](int w){ return mpath(w, 1); }))(iA["ij"]);
+    B["ij"] = ((Function<int,mpath>)([](int w){ return w==INT_MAX/2 ? mpath(w, 0) : mpath(w, 1); }))(iA["ij"]);
 
     Bivar_Function<int,mpath,mpath> * Bellman = get_Bellman_kernel();
 
@@ -58,7 +58,10 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches){
       (*Bellman)(A["ik"],C["kj"],B["ij"]);
       tbl.stop();
 //      B["ij"] = ((Function<int,mpath,mpath>)([](int w, mpath p){ return mpath(p.w+w, p.m); }))(A["ik"],B["kj"]);
-      B["ij"] += ((Function<int,mpath>)([](int w){ return mpath(w, 1); }))(iA["ij"]);
+      B["ij"] += ((Function<int,mpath>)([](int w){ return w==INT_MAX/2 ? mpath(w, 0) : mpath(w, 1); }))(iA["ij"]);
+//      Matrix<mpath> D(B);
+      //D.sparsify([](mpath p){ return p.w != INT_MAX/2; });
+//      D.print();
       Scalar<int> num_changed = Scalar<int>();
       num_changed[""] += ((Function<mpath,mpath,int>)([](mpath p, mpath q){ return (p.w!=q.w) | (p.m!=q.m); }))(C["ij"],B["ij"]);
       if (num_changed.get_val() == 0) break;
