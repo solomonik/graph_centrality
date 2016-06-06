@@ -72,10 +72,12 @@ Matrix <int> gen_rmat_matrix(World  & dw,
     A.permute(0, A_pre, pntrs, 0);
     if (dw.rank == 0) printf("preprocessed matrix has %ld edges\n", A.nnz_tot); 
   
+    A["ii"] = 0;
     *n_nnz = n_nnz_rc;
     return A;
   } else {
     *n_nnz= n;
+    A_pre["ii"] = 0;
     return A_pre;
   }
 //  return n_nnz_rc;
@@ -145,13 +147,15 @@ int btwn_cnt(Matrix <int>A,
   if (test || n<= 20){
     btwn_cnt_naive(A, v1);
     //compute centrality scores by Bellman Ford with block size bsize
-    btwn_cnt_fast(A, bsize, v2);
-    //v1.print();
+    btwn_cnt_fast(A, bsize, v2, nbatches);
     //v2.print();
     v1["i"] -= v2["i"];
-    int pass = v1.norm2() <= 1.E-6;
+    v1.print();
+    double norm = v1.norm2();
+    int pass = norm <= n*1.E-6;
 
     if (dw.rank == 0){
+      printf("error norm is %E\n",norm);
       MPI_Reduce(MPI_IN_PLACE, &pass, 1, MPI_INT, MPI_MIN, 0, MPI_COMM_WORLD);
       if (pass) 
         printf("{ betweenness centrality } passed \n");
@@ -254,7 +258,11 @@ int main(int argc, char ** argv){
 
     if (rank == 0){
       printf("Computing betweeness centrality of %d batches of size %d, verification set to %d, prep set to %d (n. of task %d)\n", nbatches, bsize, test, prep, world_size);
+      if (test && (nbatches != 0 && nbatches != 1 && nbatches != n/bsize)){
+        printf("Since testing, overriding nbatches to %d (all batches)\n",0);
+      }
     }
+    if (test) nbatches = 0;
 
 
     if (scale > 0 && ef > 0){
