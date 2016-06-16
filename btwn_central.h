@@ -60,8 +60,10 @@ CTF::Bivar_Function<int,cpath,cpath> * get_Brandes_kernel();
   * \param[in] b number of source vertices for which to compute Bellman Ford at a time
   * \param[out] v vector that will contain centrality scores for each vertex
   * \param[in] nbatches, number of batches (sets of nodes of size b) to compute on (0 means all)
+  * \param[in] sp_B whether to store second operand as sparse
+  * \param[in] sp_C whether to store output as sparse
   */
-void btwn_cnt_fast(CTF::Matrix<int> A, int64_t b, CTF::Vector<double> & v, int nbatches=0);
+void btwn_cnt_fast(CTF::Matrix<int> A, int b, CTF::Vector<double> & v, int nbatches, bool sp_B, bool sp_C);
 
 /**
   * \brief naive algorithm for betweenness centrality using 3D tensor of counts

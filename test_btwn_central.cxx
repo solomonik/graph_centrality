@@ -130,6 +130,8 @@ Matrix <int> gen_uniform_matrix(World  & dw,
 int btwn_cnt(Matrix <int>A, 
              int     n,
              World & dw,
+             bool    sp_B=true,
+             bool    sp_C=true,
              int     bsize=2,
              int     nbatches=1,
              int     test=0){
@@ -139,15 +141,10 @@ int btwn_cnt(Matrix <int>A,
   Vector<double> v1(n,dw);
   Vector<double> v2(n,dw);
 
-
-
- // v1.print();
- // v2.print();
-
   if (test || n<= 20){
     btwn_cnt_naive(A, v1);
     //compute centrality scores by Bellman Ford with block size bsize
-    btwn_cnt_fast(A, bsize, v2, nbatches);
+    btwn_cnt_fast(A, bsize, v2, nbatches, sp_B, sp_C);
     //v2.print();
     v1["i"] -= v2["i"];
     v1.print();
@@ -167,13 +164,13 @@ int btwn_cnt(Matrix <int>A,
   } else {
     if (dw.rank == 0)
       printf("Executing warm-up batch\n");
-    btwn_cnt_fast(A, bsize, v2, 1);
+    btwn_cnt_fast(A, bsize, v2, 1, sp_B, sp_C);
     if (dw.rank == 0)
       printf("Starting benchmarking\n");
     Timer_epoch tbtwn("Betweenness centrality");
     tbtwn.begin();
     double st_time = MPI_Wtime();
-    btwn_cnt_fast(A, bsize, v2, nbatches);
+    btwn_cnt_fast(A, bsize, v2, nbatches, sp_B, sp_C);
     tbtwn.end();
     if (dw.rank == 0){
       if (nbatches == 0) printf("Completed all batches in time %lf sec, projected total %lf sec.\n", MPI_Wtime()-st_time, MPI_Wtime()-st_time);
@@ -198,6 +195,7 @@ char* getCmdOption(char ** begin,
 
 int main(int argc, char ** argv){
   int rank, np, n, pass, bsize, nbatches, test, scale, ef, prep;
+  bool sp_B, sp_C;
   uint64_t myseed;
   double sp;
 
@@ -247,7 +245,14 @@ int main(int argc, char ** argv){
     prep = atoi(getCmdOption(input_str, input_str+in_num, "-prep"));
     if (prep < 0) prep = 0;
   } else prep = 0;
-
+  if (getCmdOption(input_str, input_str+in_num, "-sp_B")){
+    sp_B = atoi(getCmdOption(input_str, input_str+in_num, "-sp_B"));
+    if (sp_B < 0 || sp_B > 1) sp_B = 1;
+  } else sp_B = 1;
+  if (getCmdOption(input_str, input_str+in_num, "-sp_C")){
+    sp_C = atoi(getCmdOption(input_str, input_str+in_num, "-sp_C"));
+    if (sp_C < 0 || sp_C > 1) sp_C = 1;
+  } else sp_C = 1;
 
 
   {
@@ -257,7 +262,7 @@ int main(int argc, char ** argv){
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
     if (rank == 0){
-      printf("Computing betweeness centrality of %d batches of size %d, verification set to %d, prep set to %d (n. of task %d)\n", nbatches, bsize, test, prep, world_size);
+      printf("Computing betweeness centrality of %d batches of size %d right operand sparsity set to %d output sparsity set to %d, verification set to %d, prep set to %d (n. of task %d)\n", nbatches, bsize, sp_B, sp_C, test, prep, world_size);
       if (test && (nbatches != 0 && nbatches != 1 && nbatches != n/bsize)){
         printf("Since testing, overriding nbatches to %d (all batches)\n",0);
       }
@@ -270,13 +275,13 @@ int main(int argc, char ** argv){
         printf("R-MAT MODE ON scale=%d ef=%d seed=%lu\n", scale, ef, myseed);
       int n_nnz = 0;
       Matrix <int> A = gen_rmat_matrix(dw, scale, ef, myseed, prep, &n_nnz);
-      pass = btwn_cnt(A,n_nnz, dw, bsize, nbatches, test);
+      pass = btwn_cnt(A,n_nnz,dw,sp_B,sp_C, bsize, nbatches, test);
     }
     else {
       if (rank == 0)
-        printf("Uniform random graph with %d nodes, with %lf percent sparsity\n",n,sp);
+        printf("Uniform random graph with %d nodes, with %lf percent nonzeros\n",n,100*sp);
       Matrix <int>A = gen_uniform_matrix(dw, n, sp);   
-      pass = btwn_cnt(A,n,dw, bsize, nbatches, test);
+      pass = btwn_cnt(A,n,dw,sp_B,sp_C, bsize, nbatches, test);
     }
      //assert(pass);
   }
