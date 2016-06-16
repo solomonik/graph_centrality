@@ -147,7 +147,6 @@ int btwn_cnt(Matrix <int>A,
     btwn_cnt_fast(A, bsize, v2, nbatches, sp_B, sp_C);
     //v2.print();
     v1["i"] -= v2["i"];
-    v1.print();
     double norm = v1.norm2();
     int pass = norm <= n*1.E-6;
 
