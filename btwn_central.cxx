@@ -60,26 +60,47 @@ void btwn_cnt_fast(Matrix<int> A, int b, Vector<double> & v, int nbatches=0, boo
     double sbl = MPI_Wtime();
 #endif
     all_B["ij"] = B["ij"]; 
+
+    Scalar<int> num_init(dw); 
+    num_init[""] += ((Function<mpath,int>)([](mpath p){ return p.w<INT_MAX/2; }))(B["ij"]);
+    int nnz_last = num_init.get_val();
+    double t_all_last = 0.0, t_bm_last = 0.0;
     for (int i=0; i<n; i++, nbl++){
+      double t_st = MPI_Wtime();
       Matrix<mpath> C(B);
       B.set_zero();
       if (sp_B || sp_C){
         C.sparsify([](mpath p){ return p.w < INT_MAX/2; });
 //        if (dw.rank == 0) printf("Bellman nnz_tot = %ld\n",C.nnz_tot);
+        if (dw.rank == 0 && i!= 0){
+          printf("Bellman [nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",C.nnz_tot,A.nnz_tot,nnz_last,t_bm_last,t_all_last);
+        }
+        nnz_last = C.nnz_tot;
         if (C.nnz_tot == 0){ nbl--; break; }
       }
       CTF::Timer tbl("Bellman");
       tbl.start();
+      double t_bm_st = MPI_Wtime();
       (*Bellman)(A["ik"],C["kj"],B["ij"]);
+      double t_bm = MPI_Wtime() - t_bm_st;
       tbl.stop();
       B["ij"]+=all_B["ij"];
       C["ij"]=B["ij"];
       ((Transform<mpath,mpath>)([](mpath p, mpath & q){ if (p.w<q.w || (p.w==q.w && p.m==q.m)) q.w = INT_MAX/2; else if (p.w==q.w) q.m -= p.m; } ))(all_B["ij"],B["ij"]);
       ((Transform<mpath,mpath>)([](mpath p, mpath & q){ if (p.w <= q.w){ if (p.w < q.w || p.m > q.m){ q=p; } } }))(C["ij"],all_B["ij"]); 
+      double t_all = MPI_Wtime() - t_st;
       if (!sp_B && !sp_C){
         Scalar<int> num_changed(dw); 
         num_changed[""] += ((Function<mpath,int>)([](mpath p){ return p.w<INT_MAX/2; }))(B["ij"]);
-        if (num_changed.get_val() == 0) break;
+        int nnz_new = num_changed.get_val();
+        if (dw.rank == 0){
+          printf("Bellman [nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_new,A.nnz_tot,nnz_last,t_bm,t_all);
+          nnz_last = nnz_new;
+        }
+        if (nnz_new == 0) break;
+      } else {
+        t_all_last = t_all;
+        t_bm_last = t_bm;
       }
     }
     Tensor<mpath> ispeye = speye.slice(ib*n, (ib+k-1)*n+n-1);
@@ -102,24 +123,40 @@ void btwn_cnt_fast(Matrix<int> A, int b, Vector<double> & v, int nbatches=0, boo
     ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ cp = cpath(p.w, 1./p.m, 0.); }))(all_B["ij"],all_cB["ij"]);
 
     for (int i=0; i<n; i++, nbr++){
+      double t_st = MPI_Wtime();
       Matrix<cpath> C(cB);
       if (sp_B || sp_C){
         C.sparsify([](cpath p){ return p.w >= 0 && p.c != 0.0; });
 //        if (dw.rank == 0) printf("Brandes nnz_tot = %ld\n",C.nnz_tot);
+        if (dw.rank == 0 && i!= 0){
+          printf("Brandes [nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",C.nnz_tot,A.nnz_tot,nnz_last,t_bm_last,t_all_last);
+        }
+        nnz_last = C.nnz_tot;
         if (C.nnz_tot == 0){ nbr--; break; }
       }
       cB.set_zero();
       CTF::Timer tbr("Brandes");
       tbr.start();
+      double t_bm_st = MPI_Wtime();
       cB["ij"] += (*Brandes)(A["ki"],C["kj"]);
+      double t_bm = MPI_Wtime() - t_bm_st;
       tbr.stop();
       ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ if (p.w == cp.w){ cp = cpath(p.w, 1./p.m, cp.c*p.m); } else { cp = cpath(p.w, 1./p.m, 0.0); } }))(all_B["ij"],cB["ij"]);
       all_cB["ij"] += cB["ij"];
 
+      double t_all = MPI_Wtime() - t_st;
       if (!sp_B && !sp_C){
         Scalar<int> num_changed = Scalar<int>();
         num_changed[""] += ((Function<cpath,int>)([](cpath p){ return p.w >= 0 && p.c!=0.0; }))(cB["ij"]);
-        if (num_changed.get_val() == 0) break;
+        int64_t nnz_new = num_changed.get_val();
+        if (dw.rank == 0){
+          printf("Brandes [nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_new,A.nnz_tot,nnz_last,t_bm,t_all);
+          nnz_last = nnz_new;
+        }
+        if (nnz_new == 0) break;
+      } else {
+        t_all_last = t_all;
+        t_bm_last = t_bm;
       }
     }
     ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ if (p.w == cp.w){ cp = cpath(p.w, 1./p.m, cp.c); } else { cp = cpath(p.w, 1./p.m, 0.0); } }))(all_B["ij"],cB["ij"]);
