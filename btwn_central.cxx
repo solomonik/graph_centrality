@@ -24,10 +24,10 @@ namespace CTF {
   }
 }
 
-void btwn_cnt_fast(Matrix<int> A, int b, Vector<double> & v, int nbatches=0, bool sp_B=true, bool sp_C=true){
+void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0, bool sp_B=true, bool sp_C=true){
   assert(sp_B || !sp_C);
   World dw = *A.wrld;
-  int n = A.nrow;
+  int64_t n = A.nrow;
 
   Semiring<mpath> p = get_mpath_semiring();
   Monoid<cpath> cp = get_cpath_monoid();
@@ -37,8 +37,8 @@ void btwn_cnt_fast(Matrix<int> A, int b, Vector<double> & v, int nbatches=0, boo
   Scalar<mpath> sm(mpath(0,1),dw,p);
   speye["ii"] = sm[""];
   ((Transform<int>)([=](int& w){ w = INT_MAX/2; }))(A["ii"]);
-  for (int ib=0; ib<n && (nbatches == 0 || ib/b<nbatches); ib+=b){
-    int k = std::min(b, n-ib);
+  for (int64_t ib=0; ib<n && (nbatches == 0 || ib/b<nbatches); ib+=b){
+    int64_t k = std::min(b, n-ib);
 
     //initialize shortest mpath vectors from the next k sources to the corresponding columns of the adjacency matrices and loops with weight 0
     //((Transform<int>)([=](int& w){ w = 0; }))(A["ii"]);

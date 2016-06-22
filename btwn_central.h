@@ -63,7 +63,7 @@ CTF::Bivar_Function<int,cpath,cpath> * get_Brandes_kernel();
   * \param[in] sp_B whether to store second operand as sparse
   * \param[in] sp_C whether to store output as sparse
   */
-void btwn_cnt_fast(CTF::Matrix<int> A, int b, CTF::Vector<double> & v, int nbatches, bool sp_B, bool sp_C);
+void btwn_cnt_fast(CTF::Matrix<int> A, int64_t b, CTF::Vector<double> & v, int nbatches, bool sp_B, bool sp_C);
 
 /**
   * \brief naive algorithm for betweenness centrality using 3D tensor of counts
