@@ -65,6 +65,7 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
     num_init[""] += ((Function<mpath,int>)([](mpath p){ return p.w<INT_MAX/2; }))(B["ij"]);
     int64_t nnz_last = num_init.get_val();
     double t_all_last = 0.0, t_bm_last = 0.0;
+    int64_t nnz_out = 0;
     for (int i=0; i<n; i++, nbl++){
       double t_st = MPI_Wtime();
       Matrix<mpath> C(B);
@@ -72,8 +73,9 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
       if (sp_B || sp_C){
         C.sparsify([](mpath p){ return p.w < INT_MAX/2; });
 //        if (dw.rank == 0) printf("Bellman nnz_tot = %ld\n",C.nnz_tot);
+        if (!sp_C) nnz_out = C.nnz_tot;
         if (dw.rank == 0 && i!= 0){
-          printf("Bellman [nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",C.nnz_tot,A.nnz_tot,nnz_last,t_bm_last,t_all_last);
+          printf("Bellman [nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_out,A.nnz_tot,nnz_last,t_bm_last,t_all_last);
         }
         nnz_last = C.nnz_tot;
         if (C.nnz_tot == 0){ nbl--; break; }
@@ -83,6 +85,7 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
       double t_bm_st = MPI_Wtime();
       (*Bellman)(A["ik"],C["kj"],B["ij"]);
       double t_bm = MPI_Wtime() - t_bm_st;
+      if (sp_C) nnz_out = B.nnz_tot;
       tbl.stop();
       CTF::Timer tblp1("Bellman_post_tform1");
       tblp1.start();
@@ -125,15 +128,15 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
     double sbr = MPI_Wtime();
 #endif
     ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ cp = cpath(p.w, 1./p.m, 0.); }))(all_B["ij"],all_cB["ij"]);
-
+    nnz_last = n*k-k;
     for (int i=0; i<n; i++, nbr++){
       double t_st = MPI_Wtime();
       Matrix<cpath> C(cB);
       if (sp_B || sp_C){
-        C.sparsify([](cpath p){ return p.w >= 0 && p.c != 0.0; });
-//        if (dw.rank == 0) printf("Brandes nnz_tot = %ld\n",C.nnz_tot);
+        if (!sp_C || i==0) C.sparsify([](cpath p){ return p.w >= 0 && p.w != INT_MAX/2 && p.c != 0.0; });
+        if (!sp_C) nnz_out = C.nnz_tot;
         if (dw.rank == 0 && i!= 0){
-          printf("Brandes [nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",C.nnz_tot,A.nnz_tot,nnz_last,t_bm_last,t_all_last);
+          printf("Brandes [nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_out,A.nnz_tot,nnz_last,t_bm_last,t_all_last);
         }
         nnz_last = C.nnz_tot;
         if (C.nnz_tot == 0){ nbr--; break; }
@@ -144,10 +147,16 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
       double t_bm_st = MPI_Wtime();
       cB["ij"] += (*Brandes)(A["ki"],C["kj"]);
       double t_bm = MPI_Wtime() - t_bm_st;
+      if (sp_C){
+        nnz_out = cB.nnz_tot;
+      }
       tbr.stop();
       CTF::Timer tbrp("Brandes_post_tform");
       tbrp.start();
       ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ if (p.w == cp.w){ cp = cpath(p.w, 1./p.m, cp.c*p.m); } else { cp = cpath(p.w, 1./p.m, 0.0); } }))(all_B["ij"],cB["ij"]);
+      if (sp_C){
+        cB.sparsify([](cpath p){ return p.w >= 0 && p.c != 0.0; });
+      }
       tbrp.stop();
       CTF::Timer tbra("Brandes_post_add");
       tbra.start();
