@@ -30,7 +30,7 @@ Matrix <int> gen_rmat_matrix(World  & dw,
   srand(dw.rank+1);
   for (int64_t i=0; i<nedges; i++){
     inds[i] = edge[2*i]+edge[2*i+1]*n;
-    vals[i] = 1; /*rand()%20 + 1;*/
+    vals[i] = rand()%20 + 1;
   }
   if (dw.rank == 0) printf("filling CTF graph\n");
   A_pre.write(nedges,inds,vals);
