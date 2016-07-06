@@ -59,7 +59,7 @@ Matrix <int> gen_rmat_matrix(World  & dw,
       if (all_rc[i] != 0){
         if (all_rc[i] == 1) n_single++;
         else if (all_rc[i] == 2) n_double++;
-        all_rc[n_nnz_rc] = i;
+        all_rc[i] = n_nnz_rc;
         n_nnz_rc++;
       } else {
         all_rc[i] = -1;
@@ -68,7 +68,7 @@ Matrix <int> gen_rmat_matrix(World  & dw,
     if (dw.rank == 0) printf("n_nnz_rc = %d of %d vertices kept, %d are 0-degree, %d are 1-degree, %d are 2-degree\n", n_nnz_rc, n,(n-n_nnz_rc),n_single,n_double);
     Matrix<int> A(n_nnz_rc, n_nnz_rc, SP, dw, s, "A");
     int * pntrs[] = {all_rc, all_rc};
-  
+ 
     A.permute(0, A_pre, pntrs, 0);
     if (dw.rank == 0) printf("preprocessed matrix has %ld edges\n", A.nnz_tot); 
   
@@ -145,7 +145,6 @@ int btwn_cnt(Matrix <int>A,
     btwn_cnt_naive(A, v1);
     //compute centrality scores by Bellman Ford with block size bsize
     btwn_cnt_fast(A, bsize, v2, nbatches, sp_B, sp_C);
-    //v2.print();
     v1["i"] -= v2["i"];
     double norm = v1.norm2();
     int pass = norm <= n*1.E-6;
