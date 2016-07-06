@@ -117,17 +117,26 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
     double tbl = MPI_Wtime() - sbl;
 #endif
 
-    //transfer shortest mpath data to Matrix of cpaths to compute c centrality scores
-    Matrix<cpath> cB(n, k, atr_C, dw, cp, "cB");
-    ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ cp = cpath(p.w, 1./p.m, 1.); }))(all_B["ij"],cB["ij"]);
     Matrix<cpath> all_cB(n, k, dw, cp, "all_cB");
     Bivar_Function<int,cpath,cpath> * Brandes = get_Brandes_kernel();
+    ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ cp = cpath(p.w, -1., 1./p.m); }))(all_B["ij"],all_cB["ij"]);
+    all_cB["ij"] += (*Brandes)(A["ki"],all_cB["kj"]);
     //compute centrality scores by propagating them backwards from the furthest nodes (reverse Bellman Ford)
     int nbr = 0;
 #ifndef TEST_SUITE
     double sbr = MPI_Wtime();
 #endif
-    ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ cp = cpath(p.w, 1./p.m, 0.); }))(all_B["ij"],all_cB["ij"]);
+    //transfer shortest mpath data to Matrix of cpaths to compute c centrality scores
+    //Matrix<cpath> cB(n, k, atr_C, dw, cp, "cB");
+    Matrix<cpath> cB(all_cB);
+    if (sp_B){
+      cB.sparsify([](cpath p){ return p.m == -1.; });
+    } else {
+      assert(0);
+    }
+    ((Transform<cpath>)([](cpath & p){ p.c = 0.0; if (p.m == -1) p.m = 0; else p.m=-2-p.m; }))(all_cB["ij"]);
+//    ((Transform<cpath>)([](cpath & p){ if (p.m == -1) p.m = 0; }))(all_cB["ij"]);
+//    ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ cp = cpath(p.w, 1./p.m, 0.); }))(all_B["ij"],all_cB["ij"]);
     nnz_last = n*k-k;
     for (int i=0; i<n; i++, nbr++){
       double t_st = MPI_Wtime();
@@ -153,7 +162,8 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
       tbr.stop();
       CTF::Timer tbrp("Brandes_post_tform");
       tbrp.start();
-      ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ if (p.w == cp.w){ cp = cpath(p.w, 1./p.m, cp.c*p.m); } else { cp = cpath(p.w, 1./p.m, 0.0); } }))(all_B["ij"],cB["ij"]);
+      //((Transform<mpath,cpath>)([](mpath p, cpath & cp){ if (p.w == cp.w){ cp = cpath(p.w, 1./p.m, cp.c*p.m); } else { cp = cpath(p.w, 1./p.m, 0.0); } }))(all_B["ij"],cB["ij"]);
+      //((Transform<mpath,cpath>)([](mpath p, cpath & cp){ if (p.w != cp.w) cp = cpath(p.w, 0, 0.0);  }))(all_B["ij"],cB["ij"]);
       if (sp_C){
         cB.sparsify([](cpath p){ return p.w >= 0 && p.c != 0.0; });
       }
@@ -162,6 +172,11 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
       tbra.start();
       all_cB["ij"] += cB["ij"];
       tbra.stop();
+      cB["ij"] = all_cB["ij"];
+      ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ cp.c += 1./p.m;  }))(all_B["ij"],cB["ij"]);
+      cB.sparsify([](cpath p){ return p.m == -1.; });
+      ((Transform<cpath>)([](cpath & p){ if (p.m == -1.) p.m = 0; }))(all_cB["ij"]);
+      
 
       double t_all = MPI_Wtime() - t_st;
       if (!sp_B && !sp_C){
@@ -178,7 +193,7 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
         t_bm_last = t_bm;
       }
     }
-    ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ if (p.w == cp.w){ cp = cpath(p.w, 1./p.m, cp.c); } else { cp = cpath(p.w, 1./p.m, 0.0); } }))(all_B["ij"],cB["ij"]);
+    ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ if (p.w == cp.w){ cp = cpath(p.w, p.m, cp.c*p.m); } else { cp = cpath(p.w, p.m, 0.0); } }))(all_B["ij"],all_cB["ij"]);
 #ifndef TEST_SUITE
     double tbr = MPI_Wtime() - sbr;
     if (dw.rank == 0)
