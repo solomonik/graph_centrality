@@ -129,13 +129,10 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
     //transfer shortest mpath data to Matrix of cpaths to compute c centrality scores
     //Matrix<cpath> cB(n, k, atr_C, dw, cp, "cB");
     Matrix<cpath> cB(all_cB);
-    if (sp_B){
+    if (sp_C)
       cB.sparsify([](cpath p){ return p.m == -1.; });
-    } else {
-      Matrix<cpath> scB(cB);
-      scB.sparsify([](cpath p){ return p.m == -1.; });
-      cB["ij"] = scB["ij"];
-    }
+    else 
+      ((Transform<cpath>)([](cpath & p){ if (p.m != -1) p = cpath(-INT_MAX/2,0,0); }))(cB["ij"]);
     ((Transform<cpath>)([](cpath & p){ p.c = 0.0; if (p.m == -1) p.m = 0; else p.m=-2-p.m; }))(all_cB["ij"]);
 //    ((Transform<cpath>)([](cpath & p){ if (p.m == -1) p.m = 0; }))(all_cB["ij"]);
 //    ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ cp = cpath(p.w, 1./p.m, 0.); }))(all_B["ij"],all_cB["ij"]);
@@ -164,8 +161,6 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
       tbr.stop();
       CTF::Timer tbrp("Brandes_post_tform");
       tbrp.start();
-      //((Transform<mpath,cpath>)([](mpath p, cpath & cp){ if (p.w == cp.w){ cp = cpath(p.w, 1./p.m, cp.c*p.m); } else { cp = cpath(p.w, 1./p.m, 0.0); } }))(all_B["ij"],cB["ij"]);
-      //((Transform<mpath,cpath>)([](mpath p, cpath & cp){ if (p.w != cp.w) cp = cpath(p.w, 0, 0.0);  }))(all_B["ij"],cB["ij"]);
       if (sp_C){
         cB.sparsify([](cpath p){ return p.w >= 0 && p.c != 0.0; });
       }
@@ -176,13 +171,10 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
       tbra.stop();
       cB["ij"] = all_cB["ij"];
       ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ cp.c += 1./p.m;  }))(all_B["ij"],cB["ij"]);
-     if (sp_B){
-      cB.sparsify([](cpath p){ return p.m == -1.; });
-      } else {
-        Matrix<cpath> scB(cB);
-        scB.sparsify([](cpath p){ return p.m == -1.; });
-        cB["ij"] = scB["ij"];
-      }
+      if (sp_C)
+        cB.sparsify([](cpath p){ return p.m == -1.; });
+      else 
+        ((Transform<cpath>)([](cpath & p){ if (p.m != -1) p = cpath(-INT_MAX/2,0,0); }))(cB["ij"]);
       ((Transform<cpath>)([](cpath & p){ if (p.m == -1.) p.m = 0; }))(all_cB["ij"]);
       
 
