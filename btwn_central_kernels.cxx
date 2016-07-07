@@ -19,7 +19,7 @@ Bivar_Function<int,mpath,mpath> * get_Bellman_kernel(){
 
 DEVICE HOST 
 void cfunc(cpath a, cpath & b){
-  if (a.w>b.w){ b.c=a.c; b.w=a.w; }
+  if (a.w>b.w){ b.c=a.c; b.w=a.w; b.m=a.m; }
   else if (b.w == a.w){ b.c+=a.c; b.m+=a.m; }
 }
 

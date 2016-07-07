@@ -132,7 +132,9 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
     if (sp_B){
       cB.sparsify([](cpath p){ return p.m == -1.; });
     } else {
-      assert(0);
+      Matrix<cpath> scB(cB);
+      scB.sparsify([](cpath p){ return p.m == -1.; });
+      cB["ij"] = scB["ij"];
     }
     ((Transform<cpath>)([](cpath & p){ p.c = 0.0; if (p.m == -1) p.m = 0; else p.m=-2-p.m; }))(all_cB["ij"]);
 //    ((Transform<cpath>)([](cpath & p){ if (p.m == -1) p.m = 0; }))(all_cB["ij"]);
@@ -142,7 +144,7 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
       double t_st = MPI_Wtime();
       Matrix<cpath> C(cB);
       if (sp_B || sp_C){
-        if (!sp_C || i==0) C.sparsify([](cpath p){ return p.w >= 0 && p.w != INT_MAX/2 && p.c != 0.0; });
+        if (!sp_C || i==0) C.sparsify([](cpath p){ return p.w > 0 && p.w != INT_MAX/2 && p.c != 0.0; });
         if (!sp_C) nnz_out = C.nnz_tot;
         if (dw.rank == 0 && i!= 0){
           printf("Brandes [nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_out,A.nnz_tot,nnz_last,t_bm_last,t_all_last);
@@ -174,7 +176,13 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
       tbra.stop();
       cB["ij"] = all_cB["ij"];
       ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ cp.c += 1./p.m;  }))(all_B["ij"],cB["ij"]);
+     if (sp_B){
       cB.sparsify([](cpath p){ return p.m == -1.; });
+      } else {
+        Matrix<cpath> scB(cB);
+        scB.sparsify([](cpath p){ return p.m == -1.; });
+        cB["ij"] = scB["ij"];
+      }
       ((Transform<cpath>)([](cpath & p){ if (p.m == -1.) p.m = 0; }))(all_cB["ij"]);
       
 
@@ -202,6 +210,7 @@ void btwn_cnt_fast(Matrix<int> A, int64_t b, Vector<double> & v, int nbatches=0,
     //set self-centrality scores to zero
     //FIXME: assumes loops are zero edges and there are no others zero edges in A
     ((Transform<cpath>)([](cpath & p){ if (p.w == 0) p.c=0; }))(all_cB["ij"]);
+//    all_cB.print();
 
     //accumulate centrality scores
     v["i"] += ((Function<cpath,double>)([](cpath a){ return a.c; }))(all_cB["ij"]);
