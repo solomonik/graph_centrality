@@ -10,10 +10,11 @@ Matrix <wht> gen_rmat_matrix(World  & dw,
                              int      ef,
                              uint64_t gseed,
                              bool     remove_singlets,
-                             int *    n_nnz){
+                             int *    n_nnz,
+                             int64_t  max_ewht=1){
   uint64_t *edge=NULL;
   uint64_t nedges = 0;
-  Semiring<wht> s(INT_MAX/2, 
+  Semiring<wht> s(MAX_WHT, 
                   [](wht a, wht b){ return std::min(a,b); },
                   MPI_MIN,
                   0,
@@ -30,7 +31,7 @@ Matrix <wht> gen_rmat_matrix(World  & dw,
   srand(dw.rank+1);
   for (int64_t i=0; i<nedges; i++){
     inds[i] = edge[2*i]+edge[2*i+1]*n;
-    vals[i] = rand()%20 + 1;
+    vals[i] = (rand()%max_ewht) + 1;
   }
   if (dw.rank == 0) printf("filling CTF graph\n");
   A_pre.write(nedges,inds,vals);
@@ -81,10 +82,11 @@ Matrix <wht> gen_rmat_matrix(World  & dw,
 //  return n_nnz_rc;
 
 }
-Matrix <wht> gen_uniform_matrix(World  & dw,
-                                int64_t  n,
-                                double  sp=.20){
-  Semiring<wht> s(INT_MAX/2, 
+Matrix <wht> gen_uniform_matrix(World & dw,
+                                int64_t n,
+                                double  sp=.20,
+                                int64_t  max_ewht=1){
+  Semiring<wht> s(MAX_WHT, 
                   [](wht a, wht b){ return std::min(a,b); },
                   MPI_MIN,
                   0,
@@ -112,7 +114,7 @@ Matrix <wht> gen_uniform_matrix(World  & dw,
         }
       } while (is_rep);
       inds[i] = cols[col]*n+row;
-      vals[i] = (rand()%std::min(n,(int64_t)20))+1;
+      vals[i] = (rand()%max_ewht)+1;
       i++;
     }
   }
@@ -134,7 +136,7 @@ int btwn_cnt(Matrix <wht>A,
              int     nbatches=1,
              int     test=0){
 
-  //tropical semiring, define additive identity to be INT_MAX/2 to prevent integer overflow
+  //tropical semiring, define additive identity to be MAX_WHT to prevent integer overflow
 
   Vector<float> v1(n,dw);
   Vector<float> v2(n,dw);
@@ -191,6 +193,7 @@ char* getCmdOption(char ** begin,
 
 int main(int argc, char ** argv){
   int rank, np, n, pass, bsize, nbatches, test, scale, ef, prep;
+  int64_t max_ewht;
   bool sp_B, sp_C;
   uint64_t myseed;
   double sp;
@@ -249,7 +252,10 @@ int main(int argc, char ** argv){
     sp_C = atoi(getCmdOption(input_str, input_str+in_num, "-sp_C"));
     if (sp_C < 0 || sp_C > 1) sp_C = 1;
   } else sp_C = 1;
-
+  if (getCmdOption(input_str, input_str+in_num, "-mwht")){
+    max_ewht = atoi(getCmdOption(input_str, input_str+in_num, "-mwht"));
+    if (max_ewht < 1) max_ewht = 1;
+  } else max_ewht = std::min(n,20);
 
   {
     World dw(argc, argv);
@@ -270,13 +276,13 @@ int main(int argc, char ** argv){
       if (rank == 0)
         printf("R-MAT MODE ON scale=%d ef=%d seed=%lu\n", scale, ef, myseed);
       int n_nnz = 0;
-      Matrix<wht> A = gen_rmat_matrix(dw, scale, ef, myseed, prep, &n_nnz);
+      Matrix<wht> A = gen_rmat_matrix(dw, scale, ef, myseed, prep, &n_nnz, max_ewht);
       pass = btwn_cnt(A,n_nnz,dw,sp_B,sp_C, bsize, nbatches, test);
     }
     else {
       if (rank == 0)
         printf("Uniform random graph with %d nodes, with %lf percent nonzeros\n",n,100*sp);
-      Matrix<wht> A = gen_uniform_matrix(dw, n, sp);   
+      Matrix<wht> A = gen_uniform_matrix(dw, n, sp, max_ewht);   
       pass = btwn_cnt(A,n,dw,sp_B,sp_C, bsize, nbatches, test);
     }
   }
