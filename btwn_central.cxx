@@ -152,9 +152,9 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<float> & v, int nbatches=0, 
     //Matrix<cmpath> cB(n, k, atr_C, dw, cp, "cB");
     ((Transform<mpath,cmpath>)([](mpath p, cmpath & cp){ cp.c += 1./p.m;  }))(all_B["ij"],cB["ij"]);
     if (sp_C)
-      cB.sparsify([](cmpath p){ return p.m == -1.; });
+      cB.sparsify([](cmpath p){ return p.m == -1. && p.w != 0.; });
     else 
-      ((Transform<cmpath>)([](cmpath & p){ if (p.m != -1) p = cmpath(-MAX_WHT,0,0); }))(cB["ij"]);
+      ((Transform<cmpath>)([](cmpath & p){ if (p.m != -1 || p.w == 0.0) p = cmpath(-MAX_WHT,0,0); }))(cB["ij"]);
     ((Transform<cmpath>)([](cmpath & p){ p.c = 0.0; if (p.m == -1) p.m = 0; else p.m=-2-p.m; }))(all_cB["ij"]);
 
     nnz_last = n*k-k;
@@ -201,9 +201,9 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<float> & v, int nbatches=0, 
       cB["ij"] = all_cB["ij"];
       ((Transform<mpath,cmpath>)([](mpath p, cmpath & cp){ cp.c += 1./p.m;  }))(all_B["ij"],cB["ij"]);
       if (sp_C)
-        cB.sparsify([](cmpath p){ return p.m == -1.; });
+        cB.sparsify([](cmpath p){ return p.m == -1. && p.w != 0.; });
       else 
-        ((Transform<cmpath>)([](cmpath & p){ if (p.m != -1) p = cmpath(-MAX_WHT,0,0); }))(cB["ij"]);
+        ((Transform<cmpath>)([](cmpath & p){ if (p.m != -1 || p.w == 0.0) p = cmpath(-MAX_WHT,0,0); }))(cB["ij"]);
       ((Transform<cmpath>)([](cmpath & p){ if (p.m == -1.) p.m = 0; }))(all_cB["ij"]);
       
 

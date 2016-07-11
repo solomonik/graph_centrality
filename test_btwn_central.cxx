@@ -264,7 +264,7 @@ int main(int argc, char ** argv){
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
     if (rank == 0){
-      printf("Computing betweeness centrality of %d batches of size %d right operand sparsity set to %d output sparsity set to %d, verification set to %d, prep set to %d (n. of task %d)\n", nbatches, bsize, sp_B, sp_C, test, prep, world_size);
+      printf("Computing betweeness centrality of %d batches of size %d right operand sparsity set to %d output sparsity set to %d, verification set to %d, prep set to %d, max edge weight is %ld (n. of task %d)\n", nbatches, bsize, sp_B, sp_C, test, prep, max_ewht, world_size);
       if (test && (nbatches != 0 && nbatches != 1 && nbatches != n/bsize)){
         printf("Since testing, overriding nbatches to %d (all batches)\n",0);
       }
