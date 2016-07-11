@@ -5,7 +5,7 @@
 
 using namespace CTF;
 
-Matrix <int> gen_rmat_matrix(World  & dw,
+Matrix <wht> gen_rmat_matrix(World  & dw,
                              int      scale,
                              int      ef,
                              uint64_t gseed,
@@ -13,19 +13,19 @@ Matrix <int> gen_rmat_matrix(World  & dw,
                              int *    n_nnz){
   uint64_t *edge=NULL;
   uint64_t nedges = 0;
-  Semiring<int> s(INT_MAX/2, 
-                  [](int a, int b){ return std::min(a,b); },
+  Semiring<wht> s(INT_MAX/2, 
+                  [](wht a, wht b){ return std::min(a,b); },
                   MPI_MIN,
                   0,
-                  [](int a, int b){ return a+b; });
+                  [](wht a, wht b){ return a+b; });
   //random adjacency matrix
   int n = pow(2,scale);
-  Matrix<int> A_pre(n, n, SP, dw, s, "A_rmat");
+  Matrix<wht> A_pre(n, n, SP, dw, s, "A_rmat");
   if (dw.rank == 0) printf("Running graph generator n = %d... ",n);
   nedges = gen_graph(scale, ef, gseed, &edge);
   if (dw.rank == 0) printf("done.\n");
   int64_t * inds = (int64_t*)malloc(sizeof(int64_t)*nedges);
-  int * vals = (int*)malloc(sizeof(int)*nedges);
+  wht * vals = (wht*)malloc(sizeof(wht)*nedges);
 
   srand(dw.rank+1);
   for (int64_t i=0; i<nedges; i++){
@@ -47,26 +47,24 @@ Matrix <int> gen_rmat_matrix(World  & dw,
 
   if (remove_singlets){
     Vector<int> rc(n, dw);
-    rc["i"] += ((Function<int>)([](int a){ return (int)(a>0); }))(A_pre["ij"]);
-    rc["i"] += ((Function<int>)([](int a){ return (int)(a>0); }))(A_pre["ji"]);
+    rc["i"] += ((Function<wht>)([](wht a){ return (int)(a>0); }))(A_pre["ij"]);
+    rc["i"] += ((Function<wht>)([](wht a){ return (int)(a>0); }))(A_pre["ji"]);
     int * all_rc; // = (int*)malloc(sizeof(int)*n);
     int64_t nval;
     rc.read_all(&nval, &all_rc);
     int n_nnz_rc = 0;
     int n_single = 0;
-    int n_double = 0;
     for (int i=0; i<nval; i++){
       if (all_rc[i] != 0){
-        if (all_rc[i] == 1) n_single++;
-        else if (all_rc[i] == 2) n_double++;
+        if (all_rc[i] == 2) n_single++;
         all_rc[i] = n_nnz_rc;
         n_nnz_rc++;
       } else {
         all_rc[i] = -1;
       }
     }
-    if (dw.rank == 0) printf("n_nnz_rc = %d of %d vertices kept, %d are 0-degree, %d are 1-degree, %d are 2-degree\n", n_nnz_rc, n,(n-n_nnz_rc),n_single,n_double);
-    Matrix<int> A(n_nnz_rc, n_nnz_rc, SP, dw, s, "A");
+    if (dw.rank == 0) printf("n_nnz_rc = %d of %d vertices kept, %d are 0-degree, %d are 1-degree\n", n_nnz_rc, n,(n-n_nnz_rc),n_single);
+    Matrix<wht> A(n_nnz_rc, n_nnz_rc, SP, dw, s, "A");
     int * pntrs[] = {all_rc, all_rc};
  
     A.permute(0, A_pre, pntrs, 0);
@@ -83,24 +81,24 @@ Matrix <int> gen_rmat_matrix(World  & dw,
 //  return n_nnz_rc;
 
 }
-Matrix <int> gen_uniform_matrix(World  & dw,
+Matrix <wht> gen_uniform_matrix(World  & dw,
                                 int64_t  n,
                                 double  sp=.20){
-  Semiring<int> s(INT_MAX/2, 
-                  [](int a, int b){ return std::min(a,b); },
+  Semiring<wht> s(INT_MAX/2, 
+                  [](wht a, wht b){ return std::min(a,b); },
                   MPI_MIN,
                   0,
-                  [](int a, int b){ return a+b; });
+                  [](wht a, wht b){ return a+b; });
 
   //random adjacency matrix
-  Matrix<int> A(n, n, SP, dw, s, "A");
+  Matrix<wht> A(n, n, SP, dw, s, "A");
 
   //fill with values in the range of [1,min(n*n,100)]
   srand(dw.rank+1);
 //  A.fill_random(1, std::min(n*n,100)); 
   int nmy = ((int)std::max((int)(n*sp),(int)1))*((int)((n+dw.np-1)/dw.np));
   int64_t inds[nmy];
-  int vals[nmy];
+  wht vals[nmy];
   int i=0;
   for (int64_t row=dw.rank*n/dw.np; row<(int)(dw.rank+1)*n/dw.np; row++){
     int64_t cols[std::max((int)(n*sp),1)];
@@ -127,7 +125,7 @@ Matrix <int> gen_uniform_matrix(World  & dw,
    return A; 
 }
 // calculate betweenness centrality a graph of n nodes distributed on World (communicator) dw
-int btwn_cnt(Matrix <int>A, 
+int btwn_cnt(Matrix <wht>A, 
              int     n,
              World & dw,
              bool    sp_B=true,
@@ -138,16 +136,16 @@ int btwn_cnt(Matrix <int>A,
 
   //tropical semiring, define additive identity to be INT_MAX/2 to prevent integer overflow
 
-  Vector<double> v1(n,dw);
-  Vector<double> v2(n,dw);
+  Vector<float> v1(n,dw);
+  Vector<float> v2(n,dw);
 
   if (test || n<= 20){
     btwn_cnt_naive(A, v1);
     //compute centrality scores by Bellman Ford with block size bsize
     btwn_cnt_fast(A, bsize, v2, nbatches, sp_B, sp_C);
-    v1["i"] -= v2["i"];
+    ((Transform<float>)([](float a, float & b){ b=std::min(b-a, (b-a)/b); }))(v2["i"], v1["i"]);
     double norm = v1.norm2();
-    int pass = norm <= n*1.E-6;
+    int pass = norm <= n*1.E-3;
 
     if (dw.rank == 0){
       printf("error norm is %E\n",norm);
@@ -272,17 +270,17 @@ int main(int argc, char ** argv){
       if (rank == 0)
         printf("R-MAT MODE ON scale=%d ef=%d seed=%lu\n", scale, ef, myseed);
       int n_nnz = 0;
-      Matrix <int> A = gen_rmat_matrix(dw, scale, ef, myseed, prep, &n_nnz);
+      Matrix<wht> A = gen_rmat_matrix(dw, scale, ef, myseed, prep, &n_nnz);
       pass = btwn_cnt(A,n_nnz,dw,sp_B,sp_C, bsize, nbatches, test);
     }
     else {
       if (rank == 0)
         printf("Uniform random graph with %d nodes, with %lf percent nonzeros\n",n,100*sp);
-      Matrix <int>A = gen_uniform_matrix(dw, n, sp);   
+      Matrix<wht> A = gen_uniform_matrix(dw, n, sp);   
       pass = btwn_cnt(A,n,dw,sp_B,sp_C, bsize, nbatches, test);
     }
-     //assert(pass);
   }
+  //assert(pass);
   //pass = btwn_cnt_func(dw, bsize, nbatches, test, A);
   MPI_Finalize();
   return 0;

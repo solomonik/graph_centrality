@@ -10,27 +10,25 @@ void mfunc(mpath a, mpath & b){
 }
 
 DEVICE HOST 
-mpath addw(int w, mpath p){ return mpath(p.w+w,p.m); }
+mpath addw(wht w, mpath p){ return mpath(p.w+w,p.m); }
 
-Bivar_Function<int,mpath,mpath> * get_Bellman_kernel(){
-  return new Bivar_Kernel<int,mpath,mpath,addw,mfunc>();
-  //return new Bivar_Function<int,mpath,mpath>(addw);
+Bivar_Function<wht,mpath,mpath> * get_Bellman_kernel(){
+  return new Bivar_Kernel<wht,mpath,mpath,addw,mfunc>();
 }
 
 DEVICE HOST 
-void cfunc(cpath a, cpath & b){
+void cfunc(cmpath a, cmpath & b){
   if (a.w>b.w){ b.c=a.c; b.w=a.w; b.m=a.m; }
   else if (b.w == a.w){ b.c+=a.c; b.m+=a.m; }
 }
 
 DEVICE HOST
-cpath subw(int w, cpath p){
-  return cpath(p.w-w, p.m, p.c);
+cmpath subw(wht w, cpath p){
+  return cmpath(p.w-w, -1, p.c);
 }
 
-Bivar_Function<int,cpath,cpath> * get_Brandes_kernel(){
-  return new Bivar_Kernel<int,cpath,cpath,subw,cfunc>();
-  //return new Bivar_Function<int,mpath,mpath>(addw);
+Bivar_Function<wht,cpath,cmpath> * get_Brandes_kernel(){
+  return new Bivar_Kernel<wht,cpath,cmpath,subw,cfunc>();
 }
 
 
@@ -54,18 +52,11 @@ Semiring<mpath> get_mpath_semiring(){
   MPI_Op_create(
       [](void * a, void * b, int * n, MPI_Datatype*){ 
         mpath_red((mpath*)a, (mpath*)b, *n);
-/*        for (int i=0; i<*n; i++){ 
-          if (((mpath*)a)[i].w < ((mpath*)b)[i].w){
-            ((mpath*)b)[i] = ((mpath*)a)[i];
-          } else if (((mpath*)a)[i].w == ((mpath*)b)[i].w){
-            ((mpath*)b)[i].m += ((mpath*)a)[i].m;
-          }
-        }*/
       },
       1, &ompath);
 
   //tropical semiring with hops carried by winner of min
-  Semiring<mpath> p(mpath(INT_MAX/2,0), 
+  Semiring<mpath> p(mpath(MAX_WHT,0), 
                    [](mpath a, mpath b){ 
                      if (a.w<b.w){ return a; }
                      else if (b.w<a.w){ return b; }
@@ -79,9 +70,9 @@ Semiring<mpath> get_mpath_semiring(){
 }
 
 
-void cpath_red(cpath const * a,
-               cpath * b,
-               int n){
+void cmpath_red(cmpath const * a,
+                cmpath * b,
+                int n){
   #pragma omp parallel for
   for (int i=0; i<n; i++){
     if (a[i].w > b[i].w){
@@ -95,6 +86,41 @@ void cpath_red(cpath const * a,
 }
 
 
+// min Monoid for cmpath structure
+Monoid<cmpath> get_cmpath_monoid(){
+  //struct for cpath with w=cpath weight, h=#hops
+  MPI_Op ocmpath;
+
+  MPI_Op_create(
+      [](void * a, void * b, int * n, MPI_Datatype*){ 
+        cmpath_red((cmpath*)a, (cmpath*)b, *n);
+      },
+      1, &ocmpath);
+
+  Monoid<cmpath> cmp(cmpath(-MAX_WHT,0,0.), 
+                  [](cmpath a, cmpath b){
+                    if (a.w>b.w){ return a; }
+                    else if (b.w>a.w){ return b; }
+                    else { return cmpath(a.w, a.m+b.m, a.c+b.c); }
+                  }, ocmpath);
+
+  return cmp;
+}
+
+void cpath_red(cpath const * a,
+               cpath * b,
+               int n){
+  #pragma omp parallel for
+  for (int i=0; i<n; i++){
+    if (a[i].w > b[i].w){
+      b[i].w  = a[i].w;
+      b[i].c  = a[i].c;
+    } else if (a[i].w == b[i].w){
+      b[i].c += a[i].c;
+    }
+  }
+}
+
 // min Monoid for cpath structure
 Monoid<cpath> get_cpath_monoid(){
   //struct for cpath with w=cpath weight, h=#hops
@@ -103,29 +129,15 @@ Monoid<cpath> get_cpath_monoid(){
   MPI_Op_create(
       [](void * a, void * b, int * n, MPI_Datatype*){ 
         cpath_red((cpath*)a, (cpath*)b, *n);
-/*        for (int i=0; i<*n; i++){ 
-          if (((cpath*)a)[i].w > ((cpath*)b)[i].w){
-            ((cpath*)b)[i] = ((cpath*)a)[i];
-          } else if (((cpath*)a)[i].w == ((cpath*)b)[i].w){
-            ((cpath*)b)[i].m += ((cpath*)a)[i].m;
-            ((cpath*)b)[i].c += ((cpath*)a)[i].c;
-          }
-        }*/
       },
       1, &ocpath);
 
-  Monoid<cpath> cp(cpath(-INT_MAX/2,0,0.), 
+  Monoid<cpath> cp(cpath(-MAX_WHT,0.), 
                   [](cpath a, cpath b){
                     if (a.w>b.w){ return a; }
                     else if (b.w>a.w){ return b; }
-                    else { return cpath(a.w, a.m+b.m, a.c+b.c); }
+                    else { return cpath(a.w, a.c+b.c); }
                   }, ocpath);
-
-//  Bivar_Kernel<cpath,cpath,cpath,cfunc, cnfunc> tmp;
-//  Kernel k = tmp.generate_kernel<cfunc>();
-
-//  Monoid<cpath> cp(cpath(-INT_MAX/2,1,0.), ker);
-//  Kernel<cpath, cpath, cpath, cfunc> ker;
 
   return cp;
 }
