@@ -69,6 +69,7 @@ Matrix <wht> gen_rmat_matrix(World  & dw,
     int * pntrs[] = {all_rc, all_rc};
  
     A.permute(0, A_pre, pntrs, 0);
+    free(all_rc);
     if (dw.rank == 0) printf("preprocessed matrix has %ld edges\n", A.nnz_tot); 
   
     A["ii"] = 0;

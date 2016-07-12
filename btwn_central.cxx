@@ -27,6 +27,9 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
   Scalar<mpath> sm(mpath(0,1),dw,mp);
   speye["ii"] = sm[""];
   ((Transform<wht>)([=](wht& w){ w = MAX_WHT; }))(A["ii"]);
+  Bivar_Function<wht,mpath,mpath> * Bellman = get_Bellman_kernel();
+  Bivar_Function<wht,cpath,cmpath> * Brandes = get_Brandes_kernel();
+
   for (int64_t ib=0; ib<n && (nbatches == 0 || ib/b<nbatches); ib+=b){
     int64_t k = std::min(b, n-ib);
 
@@ -41,7 +44,6 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     Matrix<mpath> all_B(n, k, atr_C, dw, mp, "all_B");
     B["ij"] = ((Function<wht,mpath>)([](wht w){ return mpath(w, 1); }))(iA["ij"]);
 
-    Bivar_Function<wht,mpath,mpath> * Bellman = get_Bellman_kernel();
 
      
     //compute Bellman Ford
@@ -123,7 +125,6 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     int atr_B = 0;
     if (sp_B) atr_B = atr_B | SP;
     Matrix<cpath> C(n, k, atr_B, dw, mcp, "C");
-    Bivar_Function<wht,cpath,cmpath> * Brandes = get_Brandes_kernel();
     ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ cp = cpath(p.w, 1./p.m); }))(all_B["ij"],C["ij"]);
     all_cB["ij"] += ((Function<cpath,cmpath>)([](cpath p){ return cmpath(p.w, -1, 0.0); }))(C["ij"]);
     tbr.start();
@@ -219,6 +220,8 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     //accumulate centrality scores
     v["i"] += ((Function<cmpath,real>)([](cmpath a){ return a.c; }))(all_cB["ij"]);
   }
+  delete Bellman;
+  delete Brandes;
 }
 
 void btwn_cnt_naive(Matrix<wht> & A, Vector<real> & v){
