@@ -74,7 +74,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       CTF::Timer tbl("Bellman");
       tbl.start();
       double t_bm_st = MPI_Wtime();
-      if (sp_C && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/2.){
+      if (sp_C && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
         Matrix<mpath> dns_B(n, k, dw, mp, "dns_B");
         (*Bellman)(A["ik"],C["kj"],dns_B["ij"]);
         dns_B.sparsify();
@@ -112,13 +112,16 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     all_B["ij"] += ispeye["ij"];
     
 #ifndef TEST_SUITE
-    double tbl = MPI_Wtime() - sbl;
+    double timbl = MPI_Wtime() - sbl;
 #endif
 #ifndef TEST_SUITE
     double sbr = MPI_Wtime();
 #endif
 
     CTF::Timer tbr("Brandes");
+    CTF::Timer tbrs("Brandes_post_spfy");
+    CTF::Timer tbra("Brandes_post_add");
+    CTF::Timer tbrp("Brandes_post_tform");
 
     Matrix<cmpath> all_cB(n, k, dw, mcmp, "all_cB");
 
@@ -159,7 +162,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       cB.set_zero();
       tbr.start();
       double t_bm_st = MPI_Wtime();
-      if (sp_C && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/2.){
+      if (sp_C && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
         Matrix<cmpath> dns_cB(n, k, dw, mcmp, "dns_cB");
         dns_cB["ij"] += (*Brandes)(A["ki"],C["kj"]);
         dns_cB.sparsify();
@@ -173,16 +176,15 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
         nnz_out = cB.nnz_tot;
       }
       tbr.stop();
-      CTF::Timer tbrp("Brandes_post_tform");
-      tbrp.start();
+      tbrs.start();
       if (sp_C){
         cB.sparsify([](cmpath p){ return p.w >= 0 && p.c != 0.0; });
       }
-      tbrp.stop();
-      CTF::Timer tbra("Brandes_post_add");
+      tbrs.stop();
       tbra.start();
       all_cB["ij"] += cB["ij"];
       tbra.stop();
+      tbrp.start();
       cB["ij"] = all_cB["ij"];
       ((Transform<mpath,cmpath>)([](mpath p, cmpath & cp){ cp.c += 1./p.m;  }))(all_B["ij"],cB["ij"]);
       if (sp_C)
@@ -190,6 +192,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       else 
         ((Transform<cmpath>)([](cmpath & p){ if (p.m != -1 || p.w == 0.0) p = cmpath(-MAX_WHT,0,0); }))(cB["ij"]);
       ((Transform<cmpath>)([](cmpath & p){ if (p.m == -1.) p.m = 0; }))(all_cB["ij"]);
+      tbrp.stop();
       
 
       double t_all = MPI_Wtime() - t_st;
@@ -211,7 +214,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
 #ifndef TEST_SUITE
     double timbr = MPI_Wtime() - sbr;
     if (dw.rank == 0)
-      printf("(%d ,%d) iter (%lf, %lf) sec\n", nbl, nbr, tbl, timbr);
+      printf("(%d ,%d) iter (%lf, %lf) sec\n", nbl, nbr, timbl, timbr);
 #endif
     //set self-centrality scores to zero
     //FIXME: assumes loops are zero edges and there are no others zero edges in A
@@ -274,8 +277,10 @@ uint64_t gen_graph(int scale, int edgef, uint64_t seed, uint64_t **edges) {
 
         uint64_t nedges;
         double   initiator[4] = {.57, .19, .19, .05};
-
+        CTF::Timer tmrg("gen_graph");
+        tmrg.start();
         make_graph(scale, (((int64_t)1)<<scale)*edgef, seed, seed+1, initiator, (int64_t *)&nedges, (int64_t **)edges);
+        tmrg.stop();
 
         return nedges;
 }
