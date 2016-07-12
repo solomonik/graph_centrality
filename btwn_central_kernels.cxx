@@ -80,6 +80,7 @@ void cmpath_red(cmpath const * a,
       b[i].m  = a[i].m;
       b[i].c  = a[i].c;
     } else if (a[i].w == b[i].w){
+      b[i].m += a[i].m;
       b[i].c += a[i].c;
     }
   }

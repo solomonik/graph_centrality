@@ -12,23 +12,8 @@
 using namespace CTF;
 
 
-//overwrite printfs to make it possible to print matrices of mpaths
-namespace CTF {
-  template <>  
-  inline void Set<mpath>::print(char const * a, FILE * fp) const {
-    fprintf(fp,"(w=%f m=%f)",((mpath*)a)[0].w,((mpath*)a)[0].m);
-  }
-  template <>  
-  inline void Set<cmpath>::print(char const * a, FILE * fp) const {
-    fprintf(fp,"(w=%f m=%d c=%f)",((cmpath*)a)[0].w,((cmpath*)a)[0].m,((cmpath*)a)[0].c);
-  }
-  template <>  
-  inline void Set<cpath>::print(char const * a, FILE * fp) const {
-    fprintf(fp,"(w=%f c=%f)",((cpath*)a)[0].w,((cpath*)a)[0].c);
-  }
-}
 
-void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<float> & v, int nbatches=0, bool sp_B=true, bool sp_C=true){
+void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, bool sp_B=true, bool sp_C=true){
   assert(sp_B || !sp_C);
   World dw = *A.wrld;
   int64_t n = A.nrow;
@@ -77,7 +62,6 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<float> & v, int nbatches=0, 
       B.set_zero();
       if (sp_B || sp_C){
         C.sparsify([](mpath p){ return p.w < MAX_WHT; });
-//        if (dw.rank == 0) printf("Bellman nnz_tot = %ld\n",C.nnz_tot);
         if (!sp_C) nnz_out = C.nnz_tot;
         if (dw.rank == 0 && i!= 0){
           printf("Bellman [nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_out,A.nnz_tot,nnz_last,t_bm_last,t_all_last);
@@ -233,11 +217,11 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<float> & v, int nbatches=0, 
     ((Transform<cmpath>)([](cmpath & p){ if (p.w == 0) p.c=0; }))(all_cB["ij"]);
 
     //accumulate centrality scores
-    v["i"] += ((Function<cmpath,float>)([](cmpath a){ return a.c; }))(all_cB["ij"]);
+    v["i"] += ((Function<cmpath,real>)([](cmpath a){ return a.c; }))(all_cB["ij"]);
   }
 }
 
-void btwn_cnt_naive(Matrix<wht> & A, Vector<float> & v){
+void btwn_cnt_naive(Matrix<wht> & A, Vector<real> & v){
   World dw = *A.wrld;
   int n = A.nrow;
 
@@ -274,13 +258,13 @@ void btwn_cnt_naive(Matrix<wht> & A, Vector<float> & v){
   //        then postv_ijk = a*b/c
   ((Transform<mpath,mpath,cmpath>)(
     [=](mpath a, mpath b, cmpath & c){ 
-      if (c.w<MAX_WHT && a.w+b.w == c.w){ c.c = ((float)a.m*b.m)/c.m; } 
+      if (c.w<MAX_WHT && a.w+b.w == c.w){ c.c = ((real)a.m*b.m)/c.m; } 
       else { c.c = 0; }
     }
   ))(P["ij"],P["jk"],postv["ijk"]);
 
   //sum multiplicities v_j = sum(i,k) postv_ijk
-  v["j"] += ((Function<cmpath,float>)([](cmpath p){ return p.c; }))(postv["ijk"]);
+  v["j"] += ((Function<cmpath,real>)([](cmpath p){ return p.c; }))(postv["ijk"]);
 }
 
 uint64_t gen_graph(int scale, int edgef, uint64_t seed, uint64_t **edges) {

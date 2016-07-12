@@ -138,14 +138,14 @@ int btwn_cnt(Matrix <wht>A,
 
   //tropical semiring, define additive identity to be MAX_WHT to prevent integer overflow
 
-  Vector<float> v1(n,dw);
-  Vector<float> v2(n,dw);
+  Vector<real> v1(n,dw);
+  Vector<real> v2(n,dw);
 
   if (test || n<= 20){
     btwn_cnt_naive(A, v1);
     //compute centrality scores by Bellman Ford with block size bsize
     btwn_cnt_fast(A, bsize, v2, nbatches, sp_B, sp_C);
-    ((Transform<float>)([](float a, float & b){ b=std::min(b-a, (b-a)/b); }))(v2["i"], v1["i"]);
+    ((Transform<real>)([](real a, real & b){ b=std::min(b-a, (b-a)/b); }))(v2["i"], v1["i"]);
     double norm = v1.norm2();
     int pass = norm <= n*1.E-3;
 
