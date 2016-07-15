@@ -13,8 +13,9 @@ using namespace CTF;
 
 
 
-void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, bool sp_B=true, bool sp_C=true){
+void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, bool sp_B=true, bool sp_C=true, bool adapt=true){
   assert(sp_B || !sp_C);
+  assert(!adapt || (sp_B && sp_C));
   World dw = *A.wrld;
   int64_t n = A.nrow;
 
@@ -41,7 +42,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     int atr_C = 0;
     if (sp_C) atr_C = atr_C | SP;
     Matrix<mpath> B(n, k, atr_C, dw, mp, "B");
-    Matrix<mpath> all_B(n, k, atr_C, dw, mp, "all_B");
+    Matrix<mpath> all_B(n, k, dw, mp, "all_B");
     B["ij"] = ((Function<wht,mpath>)([](wht w){ return mpath(w, 1); }))(iA["ij"]);
 
 
@@ -53,20 +54,26 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
 #endif
     all_B["ij"] = B["ij"]; 
 
+    
     Scalar<int> num_init(dw); 
     num_init[""] += ((Function<mpath,int>)([](mpath p){ return p.w<MAX_WHT; }))(B["ij"]);
     int64_t nnz_last = num_init.get_val();
     double t_all_last = 0.0, t_bm_last = 0.0;
     int64_t nnz_out = 0;
+    int last_type = 0;
     for (int i=0; i<n; i++, nbl++){
+      Matrix<mpath> * dns_B = NULL;
       double t_st = MPI_Wtime();
       Matrix<mpath> C(B);
       B.set_zero();
       if (sp_B || sp_C){
-        C.sparsify([](mpath p){ return p.w < MAX_WHT; });
-        if (!sp_C) nnz_out = C.nnz_tot;
+        if (sp_B) C.sparsify([](mpath p){ return p.w < MAX_WHT; });
         if (dw.rank == 0 && i!= 0){
-          printf("Bellman [nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_out,A.nnz_tot,nnz_last,t_bm_last,t_all_last);
+          if (!sp_C || last_type){
+            nnz_out = C.nnz_tot;
+            printf("Bellman (dns=1) [filtered_nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_out,A.nnz_tot,nnz_last,t_bm_last,t_all_last);
+         } else
+            printf("Bellman (dns=0) [computed_nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_out,A.nnz_tot,nnz_last,t_bm_last,t_all_last);
         }
         nnz_last = C.nnz_tot;
         if (C.nnz_tot == 0){ nbl--; break; }
@@ -74,24 +81,29 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       CTF::Timer tbl("Bellman");
       tbl.start();
       double t_bm_st = MPI_Wtime();
-      if (sp_C && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
-        Matrix<mpath> dns_B(n, k, dw, mp, "dns_B");
-        (*Bellman)(A["ik"],C["kj"],dns_B["ij"]);
-        dns_B.sparsify();
-        B["ij"] += dns_B["ij"];
+      Matrix<mpath> * pB = &B;
+      if (sp_C && adapt && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
+        last_type = 1;
+        dns_B = new Matrix<mpath>(n, k, dw, mp, "dns_B");
+        (*Bellman)(A["ik"],C["kj"],(*dns_B)["ij"]);
+        pB = dns_B;
+        //dns_B.sparsify();
+        //B["ij"] += dns_B["ij"];
       } else {
+        last_type = 0;
         (*Bellman)(A["ik"],C["kj"],B["ij"]);
       }
       double t_bm = MPI_Wtime() - t_bm_st;
-      if (sp_C) nnz_out = B.nnz_tot;
+      if (sp_C && last_type == 0) nnz_out = B.nnz_tot;
       tbl.stop();
       CTF::Timer tblp1("Bellman_post_tform1");
       tblp1.start();
-      ((Transform<mpath,mpath>)([](mpath p, mpath & q){ if (p.w<q.w || (p.w==q.w && q.m==0)) q.w = MAX_WHT; } ))(all_B["ij"],B["ij"]);
+      ((Transform<mpath,mpath>)([](mpath p, mpath & q){ if (p.w<q.w || (p.w==q.w && q.m==0)) q.w = MAX_WHT; } ))(all_B["ij"],(*pB)["ij"]);
       tblp1.stop();
+      if (sp_C) pB->sparsify([](mpath p){ return p.w < MAX_WHT; });
       CTF::Timer tblp2("Bellman_post_tform2");
       tblp2.start();
-      ((Transform<mpath,mpath>)([](mpath p, mpath & q){ if (p.w <= q.w){ if (p.w < q.w){ q=p; } else if (p.m > 0){ q.m+=p.m; } } }))(B["ij"],all_B["ij"]); 
+      ((Transform<mpath,mpath>)([](mpath p, mpath & q){ if (p.w <= q.w){ if (p.w < q.w){ q=p; } else if (p.m > 0){ q.m+=p.m; } } }))((*pB)["ij"],all_B["ij"]); 
       tblp2.stop();
       double t_all = MPI_Wtime() - t_st;
       if (!sp_B && !sp_C){
@@ -99,13 +111,17 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
         num_changed[""] += ((Function<mpath,int>)([](mpath p){ return p.w<MAX_WHT; }))(B["ij"]);
         int64_t nnz_new = num_changed.get_val();
         if (dw.rank == 0){
-          printf("Bellman [nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_new,A.nnz_tot,nnz_last,t_bm,t_all);
+          printf("Bellman (dns=1) [filtered_nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_new,A.nnz_tot,nnz_last,t_bm,t_all);
           nnz_last = nnz_new;
         }
         if (nnz_new == 0) break;
       } else {
         t_all_last = t_all;
         t_bm_last = t_bm;
+      }
+      if (dns_B != NULL){
+        B = Matrix<mpath>(*dns_B);
+        delete dns_B;
       }
     }
     Tensor<mpath> ispeye = speye.slice(ib*n, (ib+k-1)*n+n-1);
@@ -147,14 +163,18 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
 
     nnz_last = n*k-k;
     for (int i=0; i<n; i++, nbr++){
+      Matrix<cmpath> * dns_cB = NULL;
       double t_st = MPI_Wtime();
       C.set_zero();
       C["ij"] += ((Function<cmpath,cpath>)([](cmpath p){ return cpath(p.w, p.c); }))(cB["ij"]);
       if (sp_B || sp_C){
         if (!sp_C || i==0) C.sparsify([](cpath p){ return p.w > 0 && p.w != MAX_WHT && p.c != 0.0; });
-        if (!sp_C) nnz_out = C.nnz_tot;
+        if (!sp_C || last_type) nnz_out = C.nnz_tot;
         if (dw.rank == 0 && i!= 0){
-          printf("Brandes [nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_out,A.nnz_tot,nnz_last,t_bm_last,t_all_last);
+          if (!sp_C || last_type)
+            printf("Brandes (dns=1) [filtered_nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_out,A.nnz_tot,nnz_last,t_bm_last,t_all_last);
+          else
+            printf("Brandes (dns=0) [computed_nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_out,A.nnz_tot,nnz_last,t_bm_last,t_all_last);
         }
         nnz_last = C.nnz_tot;
         if (C.nnz_tot == 0){ nbr--; break; }
@@ -162,34 +182,42 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       cB.set_zero();
       tbr.start();
       double t_bm_st = MPI_Wtime();
-      if (sp_C && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
-        Matrix<cmpath> dns_cB(n, k, dw, mcmp, "dns_cB");
-        dns_cB["ij"] += (*Brandes)(A["ki"],C["kj"]);
-        dns_cB.sparsify();
-        cB["ij"] += dns_cB["ij"];
+      Matrix<cmpath> * pcB = &cB;
+      if (sp_C && adapt && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
+        dns_cB = new Matrix<cmpath>(n, k, dw, mcmp, "dns_cB");
+        (*dns_cB)["ij"] += (*Brandes)(A["ki"],C["kj"]);
+        pcB = dns_cB;
+        //dns_cB.sparsify();
+        //cB["ij"] += dns_cB["ij"];
+        last_type = 1;
       } else {
         cB["ij"] += (*Brandes)(A["ki"],C["kj"]);
+        last_type = 0;
       }
 
       double t_bm = MPI_Wtime() - t_bm_st;
-      if (sp_C){
+      if (sp_C && last_type == 0){
         nnz_out = cB.nnz_tot;
       }
       tbr.stop();
       tbrs.start();
-      if (sp_C){
+      if (sp_C && last_type == 0){
         cB.sparsify([](cmpath p){ return p.w >= 0 && p.c != 0.0; });
       }
       tbrs.stop();
       tbra.start();
-      all_cB["ij"] += cB["ij"];
+      all_cB["ij"] += (*pcB)["ij"];
       tbra.stop();
       tbrp.start();
-      cB["ij"] = all_cB["ij"];
-      ((Transform<mpath,cmpath>)([](mpath p, cmpath & cp){ cp.c += 1./p.m;  }))(all_B["ij"],cB["ij"]);
-      if (sp_C)
-        cB.sparsify([](cmpath p){ return p.m == -1. && p.w != 0.; });
-      else 
+      (*pcB)["ij"] = all_cB["ij"];
+      ((Transform<mpath,cmpath>)([](mpath p, cmpath & cp){ cp.c += 1./p.m;  }))(all_B["ij"],(*pcB)["ij"]);
+      if (sp_C){
+        (*pcB).sparsify([](cmpath p){ return p.m == -1. && p.w != 0.; });
+        if (last_type){
+          cB = Matrix<cmpath>(*pcB);
+          delete pcB;
+        }
+      } else 
         ((Transform<cmpath>)([](cmpath & p){ if (p.m != -1 || p.w == 0.0) p = cmpath(-MAX_WHT,0,0); }))(cB["ij"]);
       ((Transform<cmpath>)([](cmpath & p){ if (p.m == -1.) p.m = 0; }))(all_cB["ij"]);
       tbrp.stop();
@@ -201,7 +229,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
         num_changed[""] += ((Function<cmpath,int>)([](cmpath p){ return p.w >= 0 && p.c!=0.0; }))(cB["ij"]);
         int64_t nnz_new = num_changed.get_val();
         if (dw.rank == 0){
-          printf("Brandes [nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_new,A.nnz_tot,nnz_last,t_bm,t_all);
+          printf("Brandes (dns=1) [filtered_nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_new,A.nnz_tot,nnz_last,t_bm,t_all);
           nnz_last = nnz_new;
         }
         if (nnz_new == 0) break;
