@@ -30,6 +30,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
   ((Transform<wht>)([=](wht& w){ w = MAX_WHT; }))(A["ii"]);
   Bivar_Function<wht,mpath,mpath> * Bellman = get_Bellman_kernel();
   Bivar_Function<wht,cpath,cmpath> * Brandes = get_Brandes_kernel();
+  
 
   for (int64_t ib=0; ib<n && (nbatches == 0 || ib/b<nbatches); ib+=b){
     int64_t k = std::min(b, n-ib);
@@ -46,6 +47,8 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     B["ij"] = ((Function<wht,mpath>)([](wht w){ return mpath(w, 1); }))(iA["ij"]);
 
 
+    B.leave_home();
+    all_B.leave_home();
      
     //compute Bellman Ford
     int nbl = 0;
@@ -66,6 +69,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       double t_st = MPI_Wtime();
       Matrix<mpath> C(B);
       B.set_zero();
+      C.leave_home();
       if (sp_B || sp_C){
         if (sp_B) C.sparsify([](mpath p){ return p.w < MAX_WHT; });
         if (dw.rank == 0 && i!= 0){
@@ -85,6 +89,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       if (sp_C && adapt && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
         last_type = 1;
         dns_B = new Matrix<mpath>(n, k, dw, mp, "dns_B");
+        dns_B->leave_home();
         (*Bellman)(A["ik"],C["kj"],(*dns_B)["ij"]);
         pB = dns_B;
         //dns_B.sparsify();
@@ -140,10 +145,12 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     CTF::Timer tbrp("Brandes_post_tform");
 
     Matrix<cmpath> all_cB(n, k, dw, mcmp, "all_cB");
+    all_cB.leave_home();
 
     int atr_B = 0;
     if (sp_B) atr_B = atr_B | SP;
     Matrix<cpath> C(n, k, atr_B, dw, mcp, "C");
+    C.leave_home();
     ((Transform<mpath,cpath>)([](mpath p, cpath & cp){ cp = cpath(p.w, 1./p.m); }))(all_B["ij"],C["ij"]);
     all_cB["ij"] += ((Function<cpath,cmpath>)([](cpath p){ return cmpath(p.w, -1, 0.0); }))(C["ij"]);
     tbr.start();
@@ -152,6 +159,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     //compute centrality scores by propagating them backwards from the furthest nodes (reverse Bellman Ford)
     int nbr = 0;
     Matrix<cmpath> cB(all_cB);
+    cB.leave_home();
     //transfer shortest mpath data to Matrix of cmpaths to compute c centrality scores
     //Matrix<cmpath> cB(n, k, atr_C, dw, cp, "cB");
     ((Transform<mpath,cmpath>)([](mpath p, cmpath & cp){ cp.c += 1./p.m;  }))(all_B["ij"],cB["ij"]);
@@ -185,6 +193,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       Matrix<cmpath> * pcB = &cB;
       if (sp_C && adapt && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
         dns_cB = new Matrix<cmpath>(n, k, dw, mcmp, "dns_cB");
+        dns_cB->leave_home();
         (*dns_cB)["ij"] += (*Brandes)(A["ki"],C["kj"]);
         pcB = dns_cB;
         //dns_cB.sparsify();
