@@ -211,8 +211,8 @@ int main(int argc, char ** argv){
 
   if (getCmdOption(input_str, input_str+in_num, "-n")){
     n = atoi(getCmdOption(input_str, input_str+in_num, "-n"));
-    if (n < 0) n = 7;
-  } else n = 7;
+    if (n < 0) n = 27;
+  } else n = 27;
 
   if (getCmdOption(input_str, input_str+in_num, "-sp")){
     sp = atof(getCmdOption(input_str, input_str+in_num, "-sp"));
@@ -220,16 +220,16 @@ int main(int argc, char ** argv){
   } else sp = .2;
   if (getCmdOption(input_str, input_str+in_num, "-bsize")){
     bsize = atoi(getCmdOption(input_str, input_str+in_num, "-bsize"));
-    if (bsize < 0) bsize = 2;
-  } else bsize = 2;
+    if (bsize < 0) bsize = 8;
+  } else bsize = 8;
   if (getCmdOption(input_str, input_str+in_num, "-nbatches")){
     nbatches = atoi(getCmdOption(input_str, input_str+in_num, "-nbatches"));
-    if (nbatches < 0) nbatches = 1;
-  } else nbatches = 1;
+    if (nbatches < 0) nbatches = 0;
+  } else nbatches = 0;
   if (getCmdOption(input_str, input_str+in_num, "-test")){
     test = atoi(getCmdOption(input_str, input_str+in_num, "-test"));
-    if (test < 0) test = 0;
-  } else test = 0;
+    if (test < 0) test = (nbatches == 0);
+  } else test = (nbatches == 0);
   if (getCmdOption(input_str, input_str+in_num, "-S")){
     scale = atoi(getCmdOption(input_str, input_str+in_num, "-S"));
     if (scale < 0) scale=10;
@@ -240,7 +240,7 @@ int main(int argc, char ** argv){
   } else ef=0;
   if (getCmdOption(input_str, input_str+in_num, "-seed")){
     myseed = atoi(getCmdOption(input_str, input_str+in_num, "-seed"));
-    if (myseed < 0) myseed=SEED;
+    myseed=SEED;
   } else myseed=SEED;
   if (getCmdOption(input_str, input_str+in_num, "-prep")){
     prep = atoi(getCmdOption(input_str, input_str+in_num, "-prep"));
