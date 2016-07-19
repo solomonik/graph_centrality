@@ -147,7 +147,7 @@ int btwn_cnt(Matrix <wht>A,
     btwn_cnt_naive(A, v1);
     //compute centrality scores by Bellman Ford with block size bsize
     btwn_cnt_fast(A, bsize, v2, nbatches, sp_B, sp_C, adapt);
-    ((Transform<real>)([](real a, real & b){ b=std::min(b-a, (b-a)/b); }))(v2["i"], v1["i"]);
+    ((Transform<real>)([](real a, real & b){ b= std::abs(b) >= 1 ? std::min(b-a, (b-a)/b) : b-a; }))(v2["i"], v1["i"]);
     double norm = v1.norm2();
     int pass = norm <= n*1.E-3;
 
