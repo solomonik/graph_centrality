@@ -235,7 +235,10 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       double t_bm_st = MPI_Wtime();
       Matrix<cmpath> * pcB = &cB;
       if (sp_C && adapt && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
-        dns_cB = new Matrix<cmpath>(n, k, dw, mcmp, "dns_cB");
+        if (c_rep > 0)
+          dns_cB = new Matrix<cmpath>(n, k, dw, mcmp, "dns_cB");
+        else
+          dns_cB = new Matrix<cmpath>(n, k, "ij", p3D["ijj"], Idx_Partition(), NS, dw, mcmp, "dns_cB");
 //        dns_cB->leave_home();
         (*dns_cB)["ij"] += (*Brandes)((*rep_A)["ki"],C["kj"]);
         pcB = dns_cB;

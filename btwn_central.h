@@ -26,7 +26,7 @@ typedef float wht;
 //typedef int mlt;
 //typedef int wht;
 //#define MAX_WHT (INT_MAX/2)
-typedef float real;
+typedef double real;
 //structure for regular path that keeps track of the multiplicity of paths
 class mpath {
   public:
