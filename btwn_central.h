@@ -105,8 +105,9 @@ CTF::Bivar_Function<wht,cpath,cmpath> * get_Brandes_kernel();
   * \param[in] sp_B whether to store second operand as sparse
   * \param[in] sp_C whether to store output as sparse
   * \param[in] adapt (can be true iff sp_B and sp_C both are), turns on output sparsity selectively
+  * \param[in] c_rep if greater than 0, initial mapping selected manually for matrices, replicating the adjacency graph c_rep times
   */
-void btwn_cnt_fast(CTF::Matrix<wht> A, int64_t b, CTF::Vector<real> & v, int nbatches, bool sp_B, bool sp_C, bool adapt);
+void btwn_cnt_fast(CTF::Matrix<wht> A, int64_t b, CTF::Vector<real> & v, int nbatches, bool sp_B, bool sp_C, bool adapt, int c_rep);
 
 /**
   * \brief naive algorithm for betweenness centrality using 3D tensor of counts

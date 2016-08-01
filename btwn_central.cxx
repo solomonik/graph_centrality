@@ -13,11 +13,19 @@ using namespace CTF;
 
 
 
-void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, bool sp_B=true, bool sp_C=true, bool adapt=true){
+void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, bool sp_B=true, bool sp_C=true, bool adapt=true, int c_rep = 1){
   assert(sp_B || !sp_C);
   assert(!adapt || (sp_B && sp_C));
   World dw = *A.wrld;
   int64_t n = A.nrow;
+  int pc, pr;
+
+  if (c_rep>0){
+    assert(dw.np%c_rep == 0 && c_rep <= dw.np);
+    pc = sqrt(dw.np/c_rep);
+    while (pc*(dw.np/(pc*c_rep)) != dw.np) pc++;
+    pr = dw.np/pc;
+  }
 
   Semiring<mpath> mp  = get_mpath_semiring();
   Monoid<cmpath> mcmp = get_cmpath_monoid();
@@ -30,20 +38,40 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
   Transform<wht>([=](wht& w){ w = MAX_WHT; })(A["ii"]);
   Bivar_Function<wht,mpath,mpath> * Bellman = get_Bellman_kernel();
   Bivar_Function<wht,cpath,cmpath> * Brandes = get_Brandes_kernel();
-  
+
+  int plens_3D[]  = {pc,c_rep,pr};
+  int plens_2Dc[] = {pc*c_rep,pr};
+  int plens_2Dr[] = {pc,c_rep*pr};
+  Partition p3D(3, plens_3D);
+  Partition p2Dc(2, plens_2Dc);
+  Partition p2Dr(2, plens_2Dr);
+  int blk[] = {1,1};
+  Partition blk_2Dk(2, blk);
+
 
   for (int64_t ib=0; ib<n && (nbatches == 0 || ib/b<nbatches); ib+=b){
     int64_t k = std::min(b, n-ib);
 
     //initialize shortest mpath vectors from the next k sources to the corresponding columns of the adjacency matrices and loops with weight 0
     //Transform<int>([=](int& w){ w = 0; })(A["ii"]);
-    Tensor<wht> iA = A.slice(ib*n, (ib+k-1)*n+n-1);
+    Tensor<wht> iA;
+    if (c_rep > 0){
+      iA = Tensor<wht>(2, A.lens, A.sym, *A.wrld, "ij", p3D["ikj"]);
+      iA["ij"] = A.slice(ib*n, (ib+k-1)*n+n-1)["ij"];
+    } else
+      iA = A.slice(ib*n, (ib+k-1)*n+n-1);
 
     //let shortest mpaths vectors be mpaths
     int atr_C = 0;
     if (sp_C) atr_C = atr_C | SP;
-    Matrix<mpath> B(n, k, atr_C, dw, mp, "B");
-    Matrix<mpath> all_B(n, k, dw, mp, "all_B");
+    Matrix<mpath> B, all_B;
+    if (c_rep > 0){
+      B = Matrix<mpath>(n, k, "ij", p2Dr["ij"], Idx_Partition(), atr_C, dw, mp);
+      all_B = Matrix<mpath>(n, k, "ij", p2Dr["ij"], Idx_Partition(), NS, dw, mp);
+    } else {
+      B = Matrix<mpath>(n, k, atr_C, dw, mp);
+      all_B = Matrix<mpath>(n, k, dw, mp, "all_B");
+    }
     B["ij"] = Function<wht,mpath>([](wht w){ return mpath(w, 1); })(iA["ij"]);
 
 

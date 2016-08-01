@@ -136,7 +136,8 @@ int btwn_cnt(Matrix <wht>A,
              int     bsize=2,
              int     nbatches=1,
              int     test=0,
-             bool    adapt=1){
+             bool    adapt=1,
+             int     c_rep=0){
 
   //tropical semiring, define additive identity to be MAX_WHT to prevent integer overflow
 
@@ -146,7 +147,7 @@ int btwn_cnt(Matrix <wht>A,
   if (test || n<= 20){
     btwn_cnt_naive(A, v1);
     //compute centrality scores by Bellman Ford with block size bsize
-    btwn_cnt_fast(A, bsize, v2, nbatches, sp_B, sp_C, adapt);
+    btwn_cnt_fast(A, bsize, v2, nbatches, sp_B, sp_C, adapt, c_rep);
     ((Transform<real>)([](real a, real & b){ b= std::abs(b) >= 1 ? std::min(b-a, (b-a)/b) : b-a; }))(v2["i"], v1["i"]);
     double norm = v1.norm2();
     int pass = norm <= n*1.E-3;
@@ -164,13 +165,13 @@ int btwn_cnt(Matrix <wht>A,
   } else {
     if (dw.rank == 0)
       printf("Executing warm-up batch\n");
-    btwn_cnt_fast(A, bsize, v2, 1, sp_B, sp_C, adapt);
+    btwn_cnt_fast(A, bsize, v2, 1, sp_B, sp_C, adapt, c_rep);
     if (dw.rank == 0)
       printf("Starting benchmarking\n");
     Timer_epoch tbtwn("Betweenness centrality");
     tbtwn.begin();
     double st_time = MPI_Wtime();
-    btwn_cnt_fast(A, bsize, v2, nbatches, sp_B, sp_C, adapt);
+    btwn_cnt_fast(A, bsize, v2, nbatches, sp_B, sp_C, adapt, c_rep);
     tbtwn.end();
     if (dw.rank == 0){
       if (nbatches == 0) printf("Completed all batches in time %lf sec, projected total %lf sec.\n", MPI_Wtime()-st_time, MPI_Wtime()-st_time);
@@ -194,7 +195,7 @@ char* getCmdOption(char ** begin,
 
 
 int main(int argc, char ** argv){
-  int rank, np, n, pass, bsize, nbatches, test, scale, ef, prep, adapt;
+  int rank, np, n, pass, bsize, nbatches, test, scale, ef, prep, adapt, c_rep;
   int64_t max_ewht;
   bool sp_B, sp_C;
   uint64_t myseed;
@@ -263,6 +264,11 @@ int main(int argc, char ** argv){
     adapt = atoi(getCmdOption(input_str, input_str+in_num, "-adapt"));
     if (adapt < 0 || adapt > 1) adapt = sp_B & sp_C;;
   } else adapt = sp_B & sp_C;
+  if (getCmdOption(input_str, input_str+in_num, "-c")){
+    c_rep = atoi(getCmdOption(input_str, input_str+in_num, "-c"));
+    if (c_rep < 1) c_rep = 0;
+  } else c_rep = 0;
+
 
   {
     World dw(argc, argv);
@@ -284,13 +290,13 @@ int main(int argc, char ** argv){
         printf("R-MAT MODE ON scale=%d ef=%d seed=%lu\n", scale, ef, myseed);
       int n_nnz = 0;
       Matrix<wht> A = gen_rmat_matrix(dw, scale, ef, myseed, prep, &n_nnz, max_ewht);
-      pass = btwn_cnt(A,n_nnz,dw,sp_B,sp_C, bsize, nbatches, test, adapt);
+      pass = btwn_cnt(A,n_nnz,dw,sp_B,sp_C, bsize, nbatches, test, adapt, c_rep);
     }
     else {
       if (rank == 0)
         printf("Uniform random graph with %d nodes, with %lf percent nonzeros\n",n,100*sp);
       Matrix<wht> A = gen_uniform_matrix(dw, n, sp, max_ewht);   
-      pass = btwn_cnt(A,n,dw,sp_B,sp_C, bsize, nbatches, test, adapt);
+      pass = btwn_cnt(A,n,dw,sp_B,sp_C, bsize, nbatches, test, adapt, c_rep);
     }
   }
   //assert(pass);
