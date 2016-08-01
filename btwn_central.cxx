@@ -23,9 +23,9 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
   if (c_rep>0){
     assert(dw.np%c_rep == 0 && c_rep <= dw.np);
     pc = sqrt(dw.np/c_rep);
-    while (pc*(dw.np/(pc*c_rep)) != dw.np) pc++;
+    while (pc*c_rep*(dw.np/(pc*c_rep)) != dw.np) pc++;
     pr = dw.np/pc;
-  }
+  } else { pc = 1; pr = 1; }
 
   Semiring<mpath> mp  = get_mpath_semiring();
   Monoid<cmpath> mcmp = get_cmpath_monoid();
@@ -56,8 +56,9 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     //Transform<int>([=](int& w){ w = 0; })(A["ii"]);
     Tensor<wht> iA;
     if (c_rep > 0){
-      iA = Tensor<wht>(2, A.lens, A.sym, *A.wrld, "ij", p3D["ikj"]);
-      iA["ij"] = A.slice(ib*n, (ib+k-1)*n+n-1)["ij"];
+      iA = Tensor<wht>(2, 1, A.lens, A.sym, *A.wrld, "ij", p3D["ikj"]);
+      Tensor<wht> sA = A.slice(ib*n, (ib+k-1)*n+n-1);
+      iA["ij"] = sA["ij"];
     } else
       iA = A.slice(ib*n, (ib+k-1)*n+n-1);
 
