@@ -24,7 +24,10 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     assert(dw.np%c_rep == 0 && c_rep <= dw.np);
     pc = sqrt(dw.np/c_rep);
     while (pc*c_rep*(dw.np/(pc*c_rep)) != dw.np) pc++;
-    pr = dw.np/pc;
+    pr = (dw.np/c_rep)/pc;
+    if (dw.rank == 0) printf("p3D is %d by %d by %d\n",pc,c_rep,pr);
+    assert(pr!=1 && pc!=1 &&c_rep!=1 &&pr==pc);
+    
   } else { pc = 1; pr = 1; }
 
   Semiring<mpath> mp  = get_mpath_semiring();
@@ -39,36 +42,29 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
   Bivar_Function<wht,mpath,mpath> * Bellman = get_Bellman_kernel();
   Bivar_Function<wht,cpath,cmpath> * Brandes = get_Brandes_kernel();
 
-  int plens_3D[]  = {pc,c_rep,pr};
-  int plens_2Dc[] = {pc*c_rep,pr};
-  int plens_2Dr[] = {pc,c_rep*pr};
+  int plens_3D[]  = {pc,pr,c_rep};
   Partition p3D(3, plens_3D);
-  Partition p2Dc(2, plens_2Dc);
-  Partition p2Dr(2, plens_2Dr);
-  int blk[] = {1,1};
-  Partition blk_2Dk(2, blk);
-
+  Tensor<wht> * rep_A;
+  if (c_rep > 0){
+    rep_A = new Matrix<wht>(n, n, "ij", p3D["ijk"], Idx_Partition(), SP, *A.wrld, *A.sr);
+    (*rep_A)["ij"] = A["ij"];
+  } else rep_A = &A;
 
   for (int64_t ib=0; ib<n && (nbatches == 0 || ib/b<nbatches); ib+=b){
     int64_t k = std::min(b, n-ib);
 
     //initialize shortest mpath vectors from the next k sources to the corresponding columns of the adjacency matrices and loops with weight 0
     //Transform<int>([=](int& w){ w = 0; })(A["ii"]);
-    Tensor<wht> iA;
-    if (c_rep > 0){
-      iA = Tensor<wht>(2, 1, A.lens, A.sym, *A.wrld, "ij", p3D["ikj"]);
-      Tensor<wht> sA = A.slice(ib*n, (ib+k-1)*n+n-1);
-      iA["ij"] = sA["ij"];
-    } else
-      iA = A.slice(ib*n, (ib+k-1)*n+n-1);
+
+    Tensor<wht> iA = A.slice(ib*n, (ib+k-1)*n+n-1);
 
     //let shortest mpaths vectors be mpaths
     int atr_C = 0;
     if (sp_C) atr_C = atr_C | SP;
     Matrix<mpath> B, all_B;
     if (c_rep > 0){
-      B = Matrix<mpath>(n, k, "ij", p2Dr["ij"], Idx_Partition(), atr_C, dw, mp);
-      all_B = Matrix<mpath>(n, k, "ij", p2Dr["ij"], Idx_Partition(), NS, dw, mp);
+      B = Matrix<mpath>(n, k, "ij", p3D["ijj"], Idx_Partition(), atr_C, dw, mp);
+      all_B = Matrix<mpath>(n, k, "ij", p3D["ijj"], Idx_Partition(), NS, dw, mp);
     } else {
       B = Matrix<mpath>(n, k, atr_C, dw, mp);
       all_B = Matrix<mpath>(n, k, dw, mp, "all_B");
@@ -96,7 +92,11 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     for (int i=0; i<n; i++, nbl++){
       Matrix<mpath> * dns_B = NULL;
       double t_st = MPI_Wtime();
-      Matrix<mpath> C(B);
+      Matrix<mpath> C;
+      if (c_rep > 0){
+        C = Matrix<mpath>(n, k, "kj", p3D["kjj"], Idx_Partition(), atr_C, dw, mp);
+        C["ij"]=B["ij"];
+      } else C = Matrix<mpath>(B);
       B.set_zero();
 //      C.leave_home();
       if (sp_B || sp_C){
@@ -117,15 +117,17 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       Matrix<mpath> * pB = &B;
       if (sp_C && adapt && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
         last_type = 1;
-        dns_B = new Matrix<mpath>(n, k, dw, mp, "dns_B");
-//        dns_B->leave_home();
-        (*Bellman)(A["ik"],C["kj"],(*dns_B)["ij"]);
+        if (c_rep > 0)
+          dns_B = new Matrix<mpath>(n, k, "kj", p3D["kjj"], Idx_Partition(), NS, dw, mp);
+        else
+          dns_B = new Matrix<mpath>(n, k, dw, mp, "dns_B");
+        (*Bellman)((*rep_A)["ik"],C["kj"],(*dns_B)["ij"]);
         pB = dns_B;
         //dns_B.sparsify();
         //B["ij"] += dns_B["ij"];
       } else {
         last_type = 0;
-        (*Bellman)(A["ik"],C["kj"],B["ij"]);
+        (*Bellman)((*rep_A)["ik"],C["kj"],B["ij"]);
       }
       double t_bm = MPI_Wtime() - t_bm_st;
       if (sp_C && last_type == 0) nnz_out = B.nnz_tot;
@@ -174,21 +176,32 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     CTF::Timer tbra("Brandes_post_add");
     CTF::Timer tbrp("Brandes_post_tform");
 
-    Matrix<cmpath> all_cB(n, k, dw, mcmp, "all_cB");
+    Matrix<cmpath> all_cB;
+    if (c_rep > 0){
+      all_cB = Matrix<cmpath>(n, k, "ij", p3D["ijj"], Idx_Partition(),NS, dw, mcmp, "all_cB");
+    } else {
+      all_cB = Matrix<cmpath>(n, k, dw, mcmp, "all_cB");
+    }
 //    all_cB.leave_home();
 
     int atr_B = 0;
     if (sp_B) atr_B = atr_B | SP;
-    Matrix<cpath> C(n, k, atr_B, dw, mcp, "C");
+    Matrix<cpath> C;
+    if (c_rep > 0){
+      C = Matrix<cpath>(n, k, "ij", p3D["ijj"], Idx_Partition(), atr_B, dw, mcp, "C");
+    } else {
+      C = Matrix<cpath>(n, k, atr_B, dw, mcp, "C");
+    }
 //    C.leave_home();
     C["ij"] = Function<mpath,cpath>([](mpath p){ return cpath(p.w, 1./p.m); })(all_B["ij"]);
     all_cB["ij"] += Function<cpath,cmpath>([](cpath p){ return cmpath(p.w, -1, 0.0); })(C["ij"]);
     tbr.start();
-    all_cB["ij"] += (*Brandes)(A["ki"],C["kj"]);
+    all_cB["ij"] += (*Brandes)((*rep_A)["ki"],C["kj"]);
     tbr.stop();
     //compute centrality scores by propagating them backwards from the furthest nodes (reverse Bellman Ford)
     int nbr = 0;
     Matrix<cmpath> cB(all_cB);
+    cB.print_map();
 //    cB.leave_home();
     //transfer shortest mpath data to Matrix of cmpaths to compute c centrality scores
     //Matrix<cmpath> cB(n, k, atr_C, dw, cp, "cB");
@@ -224,13 +237,13 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       if (sp_C && adapt && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
         dns_cB = new Matrix<cmpath>(n, k, dw, mcmp, "dns_cB");
 //        dns_cB->leave_home();
-        (*dns_cB)["ij"] += (*Brandes)(A["ki"],C["kj"]);
+        (*dns_cB)["ij"] += (*Brandes)((*rep_A)["ki"],C["kj"]);
         pcB = dns_cB;
         //dns_cB.sparsify();
         //cB["ij"] += dns_cB["ij"];
         last_type = 1;
       } else {
-        cB["ij"] += (*Brandes)(A["ki"],C["kj"]);
+        cB["ij"] += (*Brandes)((*rep_A)["ki"],C["kj"]);
         last_type = 0;
       }
 
@@ -290,6 +303,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     //accumulate centrality scores
     v["i"] += Function<cmpath,real>([](cmpath a){ return a.c; })(all_cB["ij"]);
   }
+  if (c_rep > 0) delete rep_A;
   delete Bellman;
   delete Brandes;
 }
