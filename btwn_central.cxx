@@ -26,7 +26,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     while (pc*c_rep*(dw.np/(pc*c_rep)) != dw.np) pc++;
     pr = (dw.np/c_rep)/pc;
     if (dw.rank == 0) printf("p3D is %d by %d by %d\n",pc,c_rep,pr);
-    assert(pr!=1 && pc!=1 &&c_rep!=1 &&pr==pc);
+    assert(pr!=1 && pc!=1 &&pr==pc);
     
   } else { pc = 1; pr = 1; }
 
@@ -42,11 +42,17 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
   Bivar_Function<wht,mpath,mpath> * Bellman = get_Bellman_kernel();
   Bivar_Function<wht,cpath,cmpath> * Brandes = get_Brandes_kernel();
 
-  int plens_3D[]  = {pc,pr,c_rep};
-  Partition p3D(3, plens_3D);
+  Partition prD;
+  if (c_rep > 1){
+    int plens_3D[]  = {pc,pr,c_rep};
+    prD = Partition(3, plens_3D);
+  } else {
+    int plens_2D[]  = {pc,pr};
+    prD = Partition(2, plens_2D);
+  }
   Tensor<wht> * rep_A;
   if (c_rep > 0){
-    rep_A = new Matrix<wht>(n, n, "ij", p3D["ijk"], Idx_Partition(), SP, *A.wrld, *A.sr);
+    rep_A = new Matrix<wht>(n, n, "ij", prD["ijk"], Idx_Partition(), SP, *A.wrld, *A.sr);
     (*rep_A)["ij"] = A["ij"];
   } else rep_A = &A;
 
@@ -63,8 +69,8 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     if (sp_C) atr_C = atr_C | SP;
     Matrix<mpath> B, all_B;
     if (c_rep > 0){
-      B = Matrix<mpath>(n, k, "ij", p3D["ijj"], Idx_Partition(), atr_C, dw, mp);
-      all_B = Matrix<mpath>(n, k, "ij", p3D["ijj"], Idx_Partition(), NS, dw, mp);
+      B = Matrix<mpath>(n, k, "ij", prD["ijj"], Idx_Partition(), atr_C, dw, mp);
+      all_B = Matrix<mpath>(n, k, "ij", prD["ijj"], Idx_Partition(), NS, dw, mp);
     } else {
       B = Matrix<mpath>(n, k, atr_C, dw, mp);
       all_B = Matrix<mpath>(n, k, dw, mp, "all_B");
@@ -94,7 +100,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       double t_st = MPI_Wtime();
       Matrix<mpath> C;
       if (c_rep > 0){
-        C = Matrix<mpath>(n, k, "kj", p3D["kjj"], Idx_Partition(), atr_C, dw, mp);
+        C = Matrix<mpath>(n, k, "kj", prD["kjj"], Idx_Partition(), atr_C, dw, mp);
         C["ij"]=B["ij"];
       } else C = Matrix<mpath>(B);
       B.set_zero();
@@ -118,7 +124,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       if (sp_C && adapt && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
         last_type = 1;
         if (c_rep > 0)
-          dns_B = new Matrix<mpath>(n, k, "kj", p3D["kjj"], Idx_Partition(), NS, dw, mp);
+          dns_B = new Matrix<mpath>(n, k, "kj", prD["kjj"], Idx_Partition(), NS, dw, mp);
         else
           dns_B = new Matrix<mpath>(n, k, dw, mp, "dns_B");
         (*Bellman)((*rep_A)["ik"],C["kj"],(*dns_B)["ij"]);
@@ -178,7 +184,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
 
     Matrix<cmpath> all_cB;
     if (c_rep > 0){
-      all_cB = Matrix<cmpath>(n, k, "ij", p3D["ijj"], Idx_Partition(),NS, dw, mcmp, "all_cB");
+      all_cB = Matrix<cmpath>(n, k, "ij", prD["ijj"], Idx_Partition(),NS, dw, mcmp, "all_cB");
     } else {
       all_cB = Matrix<cmpath>(n, k, dw, mcmp, "all_cB");
     }
@@ -188,7 +194,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     if (sp_B) atr_B = atr_B | SP;
     Matrix<cpath> C;
     if (c_rep > 0){
-      C = Matrix<cpath>(n, k, "ij", p3D["ijj"], Idx_Partition(), atr_B, dw, mcp, "C");
+      C = Matrix<cpath>(n, k, "ij", prD["ijj"], Idx_Partition(), atr_B, dw, mcp, "C");
     } else {
       C = Matrix<cpath>(n, k, atr_B, dw, mcp, "C");
     }
@@ -236,7 +242,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       Matrix<cmpath> * pcB = &cB;
       if (sp_C && adapt && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
         if (c_rep > 0)
-          dns_cB = new Matrix<cmpath>(n, k, "ij", p3D["ijj"], Idx_Partition(), NS, dw, mcmp, "dns_cB");
+          dns_cB = new Matrix<cmpath>(n, k, "ij", prD["ijj"], Idx_Partition(), NS, dw, mcmp, "dns_cB");
         else
           dns_cB = new Matrix<cmpath>(n, k, dw, mcmp, "dns_cB");
 //        dns_cB->leave_home();
