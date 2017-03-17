@@ -365,11 +365,11 @@ int main(int argc, char ** argv){
     if (n > 0 && edges > 0){
       if (rank == 0)
         printf("READING REAL GRAPH n=%d edges=%d\n", n, edges);
-      int n_nnz = 0;
-       Matrix<wht> A = read_matrix(dw, n, edges, gfile, prep, &n_nnz, max_ewht);
+        int n_nnz = 0;
+        Matrix<wht> A = read_matrix(dw, n, edges, gfile, prep, &n_nnz, max_ewht);
+        pass = btwn_cnt(A,n_nnz,dw,sp_B,sp_C, bsize, nbatches, test, adapt);
 
     }
-
     else if (scale > 0 && ef > 0){
       if (rank == 0)
         printf("R-MAT MODE ON scale=%d ef=%d seed=%lu\n", scale, ef, myseed);
