@@ -21,7 +21,13 @@ Matrix <wht> read_matrix(World  & dw,
   //random adjacency matrix
   Matrix<wht> A_pre(n, n, SP, dw, s, "A_rmat");
   if (dw.rank == 0) printf("Running graph reader n = %d... ",n);
+#ifdef MPIIO
+    char **leno;
+    nedges = read_graph_mpiio(dw.rank, dw.np, fpath, &edge, &leno);
+    processedges(leno, nedges, dw.rank, &edge);
+#else
   nedges = read_graph(dw.rank, dw.np, fpath, &edge);
+#endif
   if (dw.rank == 0) printf("done.\n");
   int64_t * inds = (int64_t*)malloc(sizeof(int64_t)*nedges);
   wht * vals = (wht*)malloc(sizeof(wht)*nedges);

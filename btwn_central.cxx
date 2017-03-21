@@ -370,6 +370,80 @@ static uint64_t getFsize(FILE *fp) {
 
 	return size;
 }
+uint64_t processedges(char **led, uint64_t ned, const int myid, uint64_t **edge) {
+	int i = 0;
+	uint64_t *ed=(uint64_t *)malloc(ned*sizeof(*edge));
+	for (i=0; i<ned; i++) {
+		uint64_t a, b;
+		sscanf(led[i],"%lu %lu", &a, &b);
+		ed[i*2]  = a;
+		ed[i*2+1]= b;
+	}
+	*edge = ed;
+	return ned;
+}
+static uint64_t read_graph_mpiio(int myid, int ntask, const char *fpath, uint64_t **edge, char ***led){
+#define overlap 100
+	MPI_File fh;
+	MPI_Offset filesize;
+	MPI_Offset localsize;
+	MPI_Offset start,end;
+	MPI_Status status;
+	char *chunk = NULL;
+	int MPI_RESULT = 0;
+//	const int overlap = 100;
+	uint64_t ned = 0;
+	int i = 0;
+
+	MPI_RESULT = MPI_File_open(MPI_COMM_WORLD,fpath, MPI_MODE_RDONLY, MPI_INFO_NULL,&fh);
+/*	if(MPI_RESULT != MPI_SUCCESS) 
+    		fprintf(stderr, exit("EXIT_FAILURE");
+*/
+	/* Get the size of file */
+	MPI_File_get_size(fh, &filesize); //return in bytes 
+	localsize = filesize/ntask;
+	start = myid * localsize;
+	end = start + localsize -1;
+	end +=overlap;
+	
+	if (myid  == ntask-1) end = filesize;
+	localsize = end - start + 1; //OK
+
+	chunk = (char*)malloc( (localsize + 1)*sizeof(char)); 
+	MPI_File_read_at_all(fh, start, chunk, localsize, MPI_CHAR, &status);
+	chunk[localsize] = '\0';
+
+	int locstart=0, locend=localsize;
+	if (myid != 0) {
+		while(chunk[locstart] != '\n') locstart++;
+		locstart++;
+	}
+	if (myid != ntask-1) {
+		locend-=overlap;
+		while(chunk[locend] != '\n') locend++;
+	}
+	localsize = locend-locstart+1; //OK
+
+	char *data = (char *)malloc((localsize+1)*sizeof(char));
+	memcpy(data, &(chunk[locstart]), localsize);
+	data[localsize] = '\0';
+	free(chunk);
+	
+	for ( i=0; i<localsize; i++){
+		if (data[i] == '\n') ned++;
+	}
+
+	(*led) = (char **)malloc(ned*sizeof(char *));
+	(*led)[0] = strtok(data,"\n");
+
+	for ( i=1; i < ned; i++)
+		(*led)[i] = strtok(NULL, "\n");
+
+	MPI_File_close(&fh);
+
+	return ned;
+}
+
 uint64_t read_graph(int myid, int ntask, const char *fpath, uint64_t **edge) {
 #define ALLOC_BLOCK     (2*1024)
 #define MAX_LINE        1024
