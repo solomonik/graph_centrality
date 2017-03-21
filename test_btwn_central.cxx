@@ -20,15 +20,16 @@ Matrix <wht> read_matrix(World  & dw,
                   [](wht a, wht b){ return a+b; });
   //random adjacency matrix
   Matrix<wht> A_pre(n, n, SP, dw, s, "A_rmat");
-  if (dw.rank == 0) printf("Running graph reader n = %d... ",n);
 #ifdef MPIIO
+    if (dw.rank == 0) printf("Running MPI-IO graph reader n = %d... ",n);
     char **leno;
     nedges = read_graph_mpiio(dw.rank, dw.np, fpath, &edge, &leno);
     processedges(leno, nedges, dw.rank, &edge);
 #else
+if (dw.rank == 0) printf("Running graph reader n = %d... ",n);
   nedges = read_graph(dw.rank, dw.np, fpath, &edge);
 #endif
-  if (dw.rank == 0) printf("done.\n");
+  if (dw.rank == 0) printf("donei (%d edges).\n", nedges);
   int64_t * inds = (int64_t*)malloc(sizeof(int64_t)*nedges);
   wht * vals = (wht*)malloc(sizeof(wht)*nedges);
 

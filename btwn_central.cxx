@@ -380,10 +380,10 @@ uint64_t processedges(char **led, uint64_t ned, const int myid, uint64_t **edge)
 		ed[i*2+1]= b;
 	}
 	*edge = ed;
+    ned/=2;
 	return ned;
 }
-static uint64_t read_graph_mpiio(int myid, int ntask, const char *fpath, uint64_t **edge, char ***led){
-#define overlap 100
+uint64_t read_graph_mpiio(int myid, int ntask, const char *fpath, uint64_t **edge, char ***led){
 	MPI_File fh;
 	MPI_Offset filesize;
 	MPI_Offset localsize;
@@ -391,7 +391,7 @@ static uint64_t read_graph_mpiio(int myid, int ntask, const char *fpath, uint64_
 	MPI_Status status;
 	char *chunk = NULL;
 	int MPI_RESULT = 0;
-//	const int overlap = 100;
+	const int overlap = 100; // define
 	uint64_t ned = 0;
 	int i = 0;
 
@@ -447,7 +447,7 @@ static uint64_t read_graph_mpiio(int myid, int ntask, const char *fpath, uint64_
 uint64_t read_graph(int myid, int ntask, const char *fpath, uint64_t **edge) {
 #define ALLOC_BLOCK     (2*1024)
 #define MAX_LINE        1024
-
+   
 	uint64_t *ed=NULL;
 	uint64_t i, j;
 	uint64_t n, nmax;
@@ -459,7 +459,6 @@ uint64_t read_graph(int myid, int ntask, const char *fpath, uint64_t **edge) {
 	char     str[MAX_LINE];
 
 	fp = Fopen(fpath, "r");
-
 	size = getFsize(fp);
 	rem = size % ntask;
 	off1 = (size/ntask)* myid    + (( myid    > rem)?rem: myid);
@@ -515,9 +514,10 @@ uint64_t read_graph(int myid, int ntask, const char *fpath, uint64_t **edge) {
 	}
 	fclose(fp);
 
-	n /= 2; // number of ints -> number of edges
+	// number of ints -> number of edges
 //	*edge = mirror(ed, &n); for undirected graph
-
+    n /=2;
+    *edge = ed;
 	return n;
 #undef ALLOC_BLOCK
 }
