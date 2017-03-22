@@ -17,4 +17,4 @@ test_btwn_central: graph_io.o graph_gen.o btwn_central.o btwn_central_kernels.o 
 	$(CXX) $(CXXFLAGS) -o test_btwn_central test_btwn_central.cxx graph_io.o graph_gen.o btwn_central.o btwn_central_kernels.o $(INCLUDES) $(LIBS) generator/libgraph_generator_mpi.a
 
 clean:
-	rm -f btwn_central_kernels.o btwn_central.o test_btwn_central
+	rm -f btwn_central_kernels.o btwn_central.o test_btwn_central graph_gen.o graph_io.o
