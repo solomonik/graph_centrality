@@ -2,16 +2,17 @@
 
 #include <float.h>
 #include "btwn_central.h"
+#include "graph_aux.h"
+#include "generator/make_graph.h"
 
 using namespace CTF;
-Matrix <wht> read_matrix(World  & dw,
-                             int      n,
-                             uint64_t edges,
-                             const char *fpath,
-                             bool     remove_singlets,
-                             int *    n_nnz,
-                             int64_t  max_ewht=1){
-  uint64_t *edge=NULL;
+Matrix <wht> read_matrix(World  &     dw,
+                         int          n,
+                         const char * fpath,
+                         bool         remove_singlets,
+                         int *        n_nnz,
+                         int64_t      max_ewht=1){
+  uint64_t *edges = NULL;
   uint64_t nedges = 0;
   Semiring<wht> s(MAX_WHT, 
                   [](wht a, wht b){ return std::min(a,b); },
@@ -21,21 +22,21 @@ Matrix <wht> read_matrix(World  & dw,
   //random adjacency matrix
   Matrix<wht> A_pre(n, n, SP, dw, s, "A_rmat");
 #ifdef MPIIO
-    if (dw.rank == 0) printf("Running MPI-IO graph reader n = %d... ",n);
-    char **leno;
-    nedges = read_graph_mpiio(dw.rank, dw.np, fpath, &edge, &leno);
-    processedges(leno, nedges, dw.rank, &edge);
+  if (dw.rank == 0) printf("Running MPI-IO graph reader n = %d... ",n);
+  char **leno;
+  nedges = read_graph_mpiio(dw.rank, dw.np, fpath, &edges, &leno);
+  processedges(leno, nedges, dw.rank, &edges);
 #else
-if (dw.rank == 0) printf("Running graph reader n = %d... ",n);
-  nedges = read_graph(dw.rank, dw.np, fpath, &edge);
+  if (dw.rank == 0) printf("Running graph reader n = %d... ",n);
+    nedges = read_graph(dw.rank, dw.np, fpath, &edges);
 #endif
-  if (dw.rank == 0) printf("donei (%d edges).\n", nedges);
+  if (dw.rank == 0) printf("finished reading (%d edges).\n", nedges);
   int64_t * inds = (int64_t*)malloc(sizeof(int64_t)*nedges);
   wht * vals = (wht*)malloc(sizeof(wht)*nedges);
 
   srand(dw.rank+1);
   for (int64_t i=0; i<nedges; i++){
-    inds[i] = edge[2*i]+edge[2*i+1]*n;
+    inds[i] = edges[2*i]+edges[2*i+1]*n;
     vals[i] = (rand()%max_ewht) + 1;
   }
   if (dw.rank == 0) printf("filling CTF graph\n");
@@ -378,7 +379,7 @@ int main(int argc, char ** argv){
       if (rank == 0)
         printf("READING REAL GRAPH n=%d edges=%d\n", n, edges);
         int n_nnz = 0;
-        Matrix<wht> A = read_matrix(dw, n, edges, gfile, prep, &n_nnz, max_ewht);
+        Matrix<wht> A = read_matrix(dw, n, gfile, prep, &n_nnz, max_ewht);
         pass = btwn_cnt(A,n_nnz,dw,sp_B,sp_C, bsize, nbatches, test, adapt);
 
     }

@@ -116,8 +116,4 @@ void btwn_cnt_fast(CTF::Matrix<wht> A, int64_t b, CTF::Vector<real> & v, int nba
   */
 void btwn_cnt_naive(CTF::Matrix<wht> & A, CTF::Vector<real> & v);
 uint64_t gen_graph(int scale, int edgef, uint64_t seed, uint64_t **edges);
-uint64_t norm_graph(uint64_t *ed, uint64_t ned);
-uint64_t read_graph(int myid, int ntask, const char *fpath, uint64_t **edge);
-uint64_t read_graph_mpiio(int myid, int ntask, const char *fpath, uint64_t **edge, char ***led);
-uint64_t processedges(char **led, uint64_t ned, const int myid, uint64_t **edge);
 #endif
