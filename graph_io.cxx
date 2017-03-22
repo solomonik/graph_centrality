@@ -66,14 +66,16 @@ uint64_t read_graph_mpiio(int myid, int ntask, const char *fpath, uint64_t **edg
 	MPI_Status status;
 	char *chunk = NULL;
 	int MPI_RESULT = 0;
-	const int overlap = 100; // define
-	uint64_t ned = 0;
+	int overlap = 100; // define
+	int64_t ned = 0;
 	int i = 0;
 
 	MPI_RESULT = MPI_File_open(MPI_COMM_WORLD,fpath, MPI_MODE_RDONLY, MPI_INFO_NULL,&fh);
 
 	/* Get the size of file */
 	MPI_File_get_size(fh, &filesize); //return in bytes 
+  // FIXME: skewed to give lower processor counts more edges, since
+  //        smaller node counts contain fewer characters
 	localsize = filesize/ntask;
 	start = myid * localsize;
 	end = start + localsize;
@@ -86,7 +88,7 @@ uint64_t read_graph_mpiio(int myid, int ntask, const char *fpath, uint64_t **edg
 	MPI_File_read_at_all(fh, start, chunk, localsize, MPI_CHAR, &status);
 	chunk[localsize] = '\0';
 
-	int locstart=0, locend=localsize;
+	int64_t locstart=0, locend=localsize;
 	if (myid != 0) {
 		while(chunk[locstart] != '\n') locstart++;
 		locstart++;
@@ -94,19 +96,20 @@ uint64_t read_graph_mpiio(int myid, int ntask, const char *fpath, uint64_t **edg
 	if (myid != ntask-1) {
 		locend-=overlap;
 		while(chunk[locend] != '\n') locend++;
+    locend++;
 	}
-	localsize = locend-locstart+1; //OK
+	localsize = locend-locstart; //OK
 
 	char *data = (char *)malloc((localsize+1)*sizeof(char));
 	memcpy(data, &(chunk[locstart]), localsize);
 	data[localsize] = '\0';
 	free(chunk);
 	
-  printf("localsize = %ld\n",localsize);
+  //printf("[%d] local chunk = [%ld,%ld) / %ld\n", myid, start+locstart, start+locstart+localsize, filesize);
 	for ( i=0; i<localsize; i++){
 		if (data[i] == '\n') ned++;
 	}
-  printf("ned= %ld\n",ned);
+  //printf("[%d] ned= %ld\n",myid, ned);
 
 	(*led) = (char **)malloc(ned*sizeof(char *));
 	(*led)[0] = strtok(data,"\n");
@@ -168,7 +171,7 @@ uint64_t read_graph(int myid, int ntask, const char *fpath, uint64_t **edge) {
 			//fprintf(stdout, "\nreading line number %"PRIu64": %s\n", lcounter, str);
 			if (strstr(str, "Nodes:")) {
 				//sscanf(str, "# Nodes: %" PRIu64 " Edges: %" PRIu64 "\n", &i, &nedges);
-                sscanf(str, "# Nodes: %llu Edges: %llu\n", &i, &nedges);
+                sscanf(str, "# Nodes: %lu Edges: %lu\n", &i, &nedges);
 				//fprintf(stdout, "N=%"PRIu64" E=%"PRIu64"\n", i, nedges);
 			}
 			comment_counter++;
@@ -176,7 +179,7 @@ uint64_t read_graph(int myid, int ntask, const char *fpath, uint64_t **edge) {
 			lcounter ++;
 			// Read edges
 //			sscanf(str, "%"PRIu64" %"PRIu64"\n", &i, &j);
-	        sscanf(str, "%llu %llu\n", &i, &j);
+	        sscanf(str, "%lu %lu\n", &i, &j);
 
 			if (n >= nmax) {
 				nmax += ALLOC_BLOCK;

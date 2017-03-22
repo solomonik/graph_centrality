@@ -6,51 +6,24 @@
 #include "generator/make_graph.h"
 
 using namespace CTF;
-Matrix <wht> read_matrix(World  &     dw,
-                         int          n,
-                         const char * fpath,
-                         bool         remove_singlets,
-                         int *        n_nnz,
-                         int64_t      max_ewht=1){
-  uint64_t *edges = NULL;
-  uint64_t nedges = 0;
+Matrix <wht> preprocess_graph(int           n,
+                              World &       dw,
+                              Matrix<wht> & A_pre,
+                              bool          remove_singlets,
+                              int *         n_nnz,
+                              int64_t       max_ewht=1){
   Semiring<wht> s(MAX_WHT, 
                   [](wht a, wht b){ return std::min(a,b); },
                   MPI_MIN,
                   0,
                   [](wht a, wht b){ return a+b; });
-  //random adjacency matrix
-  Matrix<wht> A_pre(n, n, SP, dw, s, "A_rmat");
-#ifdef MPIIO
-  if (dw.rank == 0) printf("Running MPI-IO graph reader n = %d... ",n);
-  char **leno;
-  nedges = read_graph_mpiio(dw.rank, dw.np, fpath, &edges, &leno);
-  processedges(leno, nedges, dw.rank, &edges);
-#else
-  if (dw.rank == 0) printf("Running graph reader n = %d... ",n);
-    nedges = read_graph(dw.rank, dw.np, fpath, &edges);
-#endif
-  if (dw.rank == 0) printf("finished reading (%d edges).\n", nedges);
-  int64_t * inds = (int64_t*)malloc(sizeof(int64_t)*nedges);
-  wht * vals = (wht*)malloc(sizeof(wht)*nedges);
 
-  srand(dw.rank+1);
-  for (int64_t i=0; i<nedges; i++){
-    inds[i] = edges[2*i]+edges[2*i+1]*n;
-    vals[i] = (rand()%max_ewht) + 1;
-  }
-  if (dw.rank == 0) printf("filling CTF graph\n");
-  A_pre.write(nedges,inds,vals);
-  A_pre["ij"] += A_pre["ji"];
-  free(inds);
-  free(vals);
-  
   A_pre["ii"] = 0;
  
   A_pre.sparsify([](int a){ return a>0; });
- 
+
   if (dw.rank == 0) 
-    printf("A contains %ld nonzeros, proc 0 generated %lu edges\n", A_pre.nnz_tot, nedges);
+    printf("A contains %ld nonzeros\n", A_pre.nnz_tot);
 
   if (remove_singlets){
     Vector<int> rc(n, dw);
@@ -90,6 +63,50 @@ Matrix <wht> read_matrix(World  &     dw,
 
 }
 
+Matrix <wht> read_matrix(World  &     dw,
+                         int          n,
+                         const char * fpath,
+                         bool         remove_singlets,
+                         int *        n_nnz,
+                         int64_t      max_ewht=1){
+  uint64_t *my_edges = NULL;
+  uint64_t my_nedges = 0;
+  Semiring<wht> s(MAX_WHT, 
+                  [](wht a, wht b){ return std::min(a,b); },
+                  MPI_MIN,
+                  0,
+                  [](wht a, wht b){ return a+b; });
+  //random adjacency matrix
+  Matrix<wht> A_pre(n, n, SP, dw, s, "A_rmat");
+#ifdef MPIIO
+  if (dw.rank == 0) printf("Running MPI-IO graph reader n = %d... ",n);
+  char **leno;
+  my_nedges = read_graph_mpiio(dw.rank, dw.np, fpath, &my_edges, &leno);
+  processedges(leno, my_nedges, dw.rank, &my_edges);
+  free(leno[0]);
+  free(leno);
+#else
+  if (dw.rank == 0) printf("Running graph reader n = %d... ",n);
+    my_nedges = read_graph(dw.rank, dw.np, fpath, &my_edges);
+#endif
+  if (dw.rank == 0) printf("finished reading (%ld edges).\n", my_nedges);
+  int64_t * inds = (int64_t*)malloc(sizeof(int64_t)*my_nedges);
+  wht * vals = (wht*)malloc(sizeof(wht)*my_nedges);
+
+  srand(dw.rank+1);
+  for (int64_t i=0; i<my_nedges; i++){
+    inds[i] = my_edges[2*i]+my_edges[2*i+1]*n;
+    vals[i] = (rand()%max_ewht) + 1;
+  }
+  if (dw.rank == 0) printf("filling CTF graph\n");
+  A_pre.write(my_nedges,inds,vals);
+  //A_pre["ij"] += A_pre["ji"];
+  free(inds);
+  free(vals);
+ 
+  return preprocess_graph(n,dw,A_pre,remove_singlets,n_nnz,max_ewht);
+}
+
 Matrix <wht> gen_rmat_matrix(World  & dw,
                              int      scale,
                              int      ef,
@@ -124,48 +141,7 @@ Matrix <wht> gen_rmat_matrix(World  & dw,
   free(inds);
   free(vals);
   
-  A_pre["ii"] = 0;
- 
-  A_pre.sparsify([](int a){ return a>0; });
- 
-  if (dw.rank == 0) 
-    printf("A contains %ld nonzeros, proc 0 generated %lu edges\n", A_pre.nnz_tot, nedges);
-
-  if (remove_singlets){
-    Vector<int> rc(n, dw);
-    rc["i"] += ((Function<wht>)([](wht a){ return (int)(a>0); }))(A_pre["ij"]);
-    rc["i"] += ((Function<wht>)([](wht a){ return (int)(a>0); }))(A_pre["ji"]);
-    int * all_rc; // = (int*)malloc(sizeof(int)*n);
-    int64_t nval;
-    rc.read_all(&nval, &all_rc);
-    int n_nnz_rc = 0;
-    int n_single = 0;
-    for (int i=0; i<nval; i++){
-      if (all_rc[i] != 0){
-        if (all_rc[i] == 2) n_single++;
-        all_rc[i] = n_nnz_rc;
-        n_nnz_rc++;
-      } else {
-        all_rc[i] = -1;
-      }
-    }
-    if (dw.rank == 0) printf("n_nnz_rc = %d of %d vertices kept, %d are 0-degree, %d are 1-degree\n", n_nnz_rc, n,(n-n_nnz_rc),n_single);
-    Matrix<wht> A(n_nnz_rc, n_nnz_rc, SP, dw, s, "A");
-    int * pntrs[] = {all_rc, all_rc};
- 
-    A.permute(0, A_pre, pntrs, 0);
-    free(all_rc);
-    if (dw.rank == 0) printf("preprocessed matrix has %ld edges\n", A.nnz_tot); 
-  
-    A["ii"] = 0;
-    *n_nnz = n_nnz_rc;
-    return A;
-  } else {
-    *n_nnz= n;
-    A_pre["ii"] = 0;
-    return A_pre;
-  }
-//  return n_nnz_rc;
+  return preprocess_graph(n,dw,A_pre,remove_singlets,n_nnz,max_ewht);
 
 }
 Matrix <wht> gen_uniform_matrix(World & dw,
@@ -360,8 +336,7 @@ int main(int argc, char ** argv){
   } else edges=0;
   if (getCmdOption(input_str, input_str+in_num, "-f")){
     gfile = getCmdOption(input_str, input_str+in_num, "-f");
-    if (edges < 1) edges = 1;
-  }
+  } else gfile = NULL;
   {
     World dw(argc, argv);
 
@@ -375,9 +350,9 @@ int main(int argc, char ** argv){
       }
     }
     if (test) nbatches = 0;
-    if (n > 0 && edges > 0){
+    if (gfile != NULL){
       if (rank == 0)
-        printf("READING REAL GRAPH n=%d edges=%d\n", n, edges);
+        printf("READING REAL GRAPH n=%d\n", n);
         int n_nnz = 0;
         Matrix<wht> A = read_matrix(dw, n, gfile, prep, &n_nnz, max_ewht);
         pass = btwn_cnt(A,n_nnz,dw,sp_B,sp_C, bsize, nbatches, test, adapt);
