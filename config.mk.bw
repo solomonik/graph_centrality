@@ -1,0 +1,13 @@
+CTFDIR    = /u/sciteam/solomon2/work/ctf/debug
+MPI_DIR   =
+CXX       = CC
+OPTS      = -O3
+CXXFLAGS  = -std=c++0x -fopenmp $(OPTS) -Wall -fpermissive -DPROFILE -DPMPI -DMPIIO -mkl
+INCLUDES  = -I$(CTFDIR)/include
+LIBS      = -L$(CTFDIR)/lib -lctf generator/libgraph_generator_mpi.a
+DEFS      =
+CUDA_ARCH = sm_37
+NVCC      = $(CXX)
+NVCCFLAGS = $(CXXFLAGS)
+
+
