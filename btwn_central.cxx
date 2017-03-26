@@ -286,7 +286,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       double t_all = MPI_Wtime() - t_st;
       if (!sp_B && !sp_C){
         Scalar<int> num_changed = Scalar<int>();
-        num_changed[""] += Function<cmpath,int>([](cmpath p){ return p.w >= 0 && p.c!=0.0; })(cB["ij"]);
+        num_changed[""] += Function<cmpath,int>([](cmpath p){ return p.w >= 0 && p.w!=MAX_WHT && p.c!=0.0; })(cB["ij"]);
         int64_t nnz_new = num_changed.get_val();
         if (dw.rank == 0){
           printf("Brandes (dns=1) [filtered_nnz_C = %ld] <- [nnz_A = %ld] * [nnz_B = %ld] took time %lf (%lf)\n",nnz_new,A.nnz_tot,nnz_last,t_bm,t_all);
