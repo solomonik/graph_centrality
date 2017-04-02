@@ -120,7 +120,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       tbl.start();
       double t_bm_st = MPI_Wtime();
       Matrix<mpath> * pB = &B;
-      if (sp_C && adapt && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
+      if (sp_C && adapt && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/6.){
         last_type = 1;
         if (c_rep > 0)
           dns_B = new Matrix<mpath>(n, k, "kj", prD["kjj"], Idx_Partition(), NS, dw, mp);
@@ -239,7 +239,7 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
       tbr.start();
       double t_bm_st = MPI_Wtime();
       Matrix<cmpath> * pcB = &cB;
-      if (sp_C && adapt && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/4.){
+      if (sp_C && adapt && (((double)A.nnz_tot)*C.nnz_tot)/n >= ((double)n)*k/12.){
         if (c_rep > 0)
           dns_cB = new Matrix<cmpath>(n, k, "ij", prD["ijj"], Idx_Partition(), NS, dw, mcmp, "dns_cB");
         else
