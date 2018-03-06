@@ -26,7 +26,7 @@ typedef float wht;
 //typedef int mlt;
 //typedef int wht;
 //#define MAX_WHT (INT_MAX/2)
-typedef double real;
+typedef double REAL;
 //structure for regular path that keeps track of the multiplicity of paths
 class mpath {
   public:
@@ -45,9 +45,9 @@ class cmpath {
   public:
   wht w;
   int m;
-  real c; // centrality score
+  REAL c; // centrality score
   DEVICE HOST
-  cmpath(wht w_, int m_, real c_){ w=w_; m=m_; c=c_;}
+  cmpath(wht w_, int m_, REAL c_){ w=w_; m=m_; c=c_;}
   DEVICE HOST
   cmpath(cmpath const & p){ w=p.w; m=p.m; c=p.c; }
   cmpath(){};
@@ -57,9 +57,9 @@ class cmpath {
 class cpath {
   public:
   wht w;
-  real c; // centrality score
+  REAL c; // centrality score
   DEVICE HOST
-  cpath(wht w_, real c_){ w=w_; c=c_;}
+  cpath(wht w_, REAL c_){ w=w_; c=c_;}
   DEVICE HOST
   cpath(cpath const & p){ w=p.w; c=p.c; }
   cpath(){};
@@ -107,13 +107,13 @@ CTF::Bivar_Function<wht,cpath,cmpath> * get_Brandes_kernel();
   * \param[in] adapt (can be true iff sp_B and sp_C both are), turns on output sparsity selectively
   * \param[in] c_rep if greater than 0, initial mapping selected manually for matrices, replicating the adjacency graph c_rep times
   */
-void btwn_cnt_fast(CTF::Matrix<wht> A, int64_t b, CTF::Vector<real> & v, int nbatches, bool sp_B, bool sp_C, bool adapt, int c_rep);
+void btwn_cnt_fast(CTF::Matrix<wht> A, int64_t b, CTF::Vector<REAL> & v, int nbatches, bool sp_B, bool sp_C, bool adapt, int c_rep);
 
 /**
   * \brief naive algorithm for betweenness centrality using 3D tensor of counts
   * \param[in] A matrix on the tropical semiring containing edge weights
   * \param[out] v vector that will contain centrality scores for each vertex
   */
-void btwn_cnt_naive(CTF::Matrix<wht> & A, CTF::Vector<real> & v);
+void btwn_cnt_naive(CTF::Matrix<wht> & A, CTF::Vector<REAL> & v);
 uint64_t gen_graph(int scale, int edgef, uint64_t seed, uint64_t **edges);
 #endif

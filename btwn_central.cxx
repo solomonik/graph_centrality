@@ -12,7 +12,7 @@ using namespace CTF;
 
 
 
-void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, bool sp_B=true, bool sp_C=true, bool adapt=true, int c_rep = 1){
+void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<REAL> & v, int nbatches=0, bool sp_B=true, bool sp_C=true, bool adapt=true, int c_rep = 1){
   assert(sp_B || !sp_C);
   assert(!adapt || (sp_B && sp_C));
   World dw = *A.wrld;
@@ -309,14 +309,14 @@ void btwn_cnt_fast(Matrix<wht> A, int64_t b, Vector<real> & v, int nbatches=0, b
     Transform<cmpath>([](cmpath & p){ if (p.w == 0) p.c=0; })(all_cB["ij"]);
 
     //accumulate centrality scores
-    v["i"] += Function<cmpath,real>([](cmpath a){ return a.c; })(all_cB["ij"]);
+    v["i"] += Function<cmpath,REAL>([](cmpath a){ return a.c; })(all_cB["ij"]);
   }
   if (c_rep > 0) delete rep_A;
   delete Bellman;
   delete Brandes;
 }
 
-void btwn_cnt_naive(Matrix<wht> & A, Vector<real> & v){
+void btwn_cnt_naive(Matrix<wht> & A, Vector<REAL> & v){
   World dw = *A.wrld;
   int n = A.nrow;
 
@@ -353,12 +353,12 @@ void btwn_cnt_naive(Matrix<wht> & A, Vector<real> & v){
   //        then postv_ijk = a*b/c
   Transform<mpath,mpath,cmpath>(
     [=](mpath a, mpath b, cmpath & c){ 
-      if (c.w<MAX_WHT && a.w+b.w == c.w){ c.c = ((real)a.m*b.m)/c.m; } 
+      if (c.w<MAX_WHT && a.w+b.w == c.w){ c.c = ((REAL)a.m*b.m)/c.m; } 
       else { c.c = 0; }
     }
   )(P["ij"],P["jk"],postv["ijk"]);
 
   //sum multiplicities v_j = sum(i,k) postv_ijk
-  v["j"] += Function<cmpath,real>([](cmpath p){ return p.c; })(postv["ijk"]);
+  v["j"] += Function<cmpath,REAL>([](cmpath p){ return p.c; })(postv["ijk"]);
 }
 

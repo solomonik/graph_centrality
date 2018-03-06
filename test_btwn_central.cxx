@@ -100,11 +100,18 @@ Matrix <wht> read_matrix(World  &     dw,
   }
   if (dw.rank == 0) printf("filling CTF graph\n");
   A_pre.write(my_nedges,inds,vals);
-  //A_pre["ij"] += A_pre["ji"];
+  A_pre["ij"] += A_pre["ji"];
   free(inds);
   free(vals);
  
-  return preprocess_graph(n,dw,A_pre,remove_singlets,n_nnz,max_ewht);
+  Matrix<wht> newA =  preprocess_graph(n,dw,A_pre,remove_singlets,n_nnz,max_ewht);
+  /*int64_t nprs;
+  newA.read_local_nnz(&nprs,&inds,&vals);
+
+  for (int64_t i=0; i<nprs; i++){
+    printf("%d %d\n",inds[i]/newA.nrow,inds[i]%newA.nrow);
+  }*/
+  return newA;
 }
 
 Matrix <wht> gen_rmat_matrix(World  & dw,
@@ -202,14 +209,14 @@ int btwn_cnt(Matrix <wht>A,
 
   //tropical semiring, define additive identity to be MAX_WHT to prevent integer overflow
 
-  Vector<real> v1(n,dw);
-  Vector<real> v2(n,dw);
+  Vector<REAL> v1(n,dw);
+  Vector<REAL> v2(n,dw);
 
   if (test || n<= 20){
     btwn_cnt_naive(A, v1);
     //compute centrality scores by Bellman Ford with block size bsize
     btwn_cnt_fast(A, bsize, v2, nbatches, sp_B, sp_C, adapt, c_rep);
-    ((Transform<real>)([](real a, real & b){ b= std::abs(b) >= 1 ? std::min(b-a, (b-a)/b) : b-a; }))(v2["i"], v1["i"]);
+    ((Transform<REAL>)([](REAL a, REAL & b){ b= std::abs(b) >= 1 ? std::min(b-a, (b-a)/b) : b-a; }))(v2["i"], v1["i"]);
     double norm = v1.norm2();
     int pass = norm <= n*1.E-3;
 
