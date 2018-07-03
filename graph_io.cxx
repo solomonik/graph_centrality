@@ -25,7 +25,7 @@ static FILE *Fopen(const char *path, const char *mode) {
 
 static uint64_t getFsize(FILE *fp) {
 
-	int rv;
+	int64_t rv;
 	uint64_t size = 0;
 
 	rv = fseek(fp, 0, SEEK_END);
@@ -47,7 +47,7 @@ static uint64_t getFsize(FILE *fp) {
 }
 
 void processedges(char **led, uint64_t ned, int myid, uint64_t **edges) {
-	int i = 0;
+	int64_t i = 0;
 	uint64_t *ed=(uint64_t *)malloc(ned*sizeof(uint64_t)*2);
 	for (i=0; i<ned; i++) {
 		uint64_t a, b;
@@ -68,7 +68,7 @@ uint64_t read_graph_mpiio(int myid, int ntask, const char *fpath, uint64_t **edg
 	int MPI_RESULT = 0;
 	int overlap = 100; // define
 	int64_t ned = 0;
-	int i = 0;
+	int64_t i = 0;
 
 	MPI_RESULT = MPI_File_open(MPI_COMM_WORLD,fpath, MPI_MODE_RDONLY, MPI_INFO_NULL,&fh);
 
@@ -158,7 +158,7 @@ uint64_t read_graph(int myid, int ntask, const char *fpath, uint64_t **edge) {
 	ed = (uint64_t *)malloc(nmax*sizeof(*ed));
 	uint64_t lcounter = 0;
 	uint64_t nedges = -1;
-	int comment_counter = 0;
+	int64_t comment_counter = 0;
 
 	/* read edges from file */
 	while (ftell(fp) < off2) {
